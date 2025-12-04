@@ -35,15 +35,101 @@ func (ts *TimeSeries) Values() []float64 {
 	return res
 }
 
+/**
+ * Adds a DataPoint to the TimeSeries.
+ *
+ * @param dp The DataPoint to add.
+ */
 func (ts *TimeSeries) AddPoint(dp DataPoint) {
 	ts.datapoints = append(ts.datapoints, dp)
 }
 
+/**
+ * Prints the TimeSeries in a human-readable format.
+ */
 func (ts *TimeSeries) Print() {
 	fmt.Println("Timestamp, Value")
 	for _, dp := range ts.datapoints {
 		fmt.Printf("%s, %.2f\n", dp.timestamp.Format(time.RFC3339), dp.value)
 	}
+}
+
+/**
+ * Slices the TimeSeries between the specified start and end times.
+ *
+ * @param start The starting time.Time for the slice (inclusive).
+ * @param end The ending time.Time for the slice (exclusive).
+ *
+ * @return A new TimeSeries containing DataPoints within the specified time range.
+ */
+func (ts TimeSeries) Slice(start time.Time, end time.Time) TimeSeries {
+	sliced := Empty()
+	for _, dp := range ts.datapoints {
+		if (dp.timestamp.Equal(start) || dp.timestamp.After(start)) && dp.timestamp.Before(end) {
+			sliced.AddPoint(dp)
+		}
+	}
+	return sliced
+}
+
+func Zip(timestamps []time.Time, values []float64) (TimeSeries, error) {
+	if len(timestamps) != len(values) {
+		return TimeSeries{}, errors.New("timestamps and values slices must have the same length")
+	}
+
+	points := make([]DataPoint, len(timestamps))
+	for i := range timestamps {
+		points[i] = DataPoint{
+			timestamp: timestamps[i],
+			value:     values[i],
+		}
+	}
+	return TimeSeries{datapoints: points}, nil
+}
+
+func (ts *TimeSeries) UnZip() ([]time.Time, []float64) {
+	timestamps := make([]time.Time, len(ts.datapoints))
+	values := make([]float64, len(ts.datapoints))
+	for i, point := range ts.datapoints {
+		timestamps[i] = point.timestamp
+		values[i] = point.value
+	}
+	return timestamps, values
+}
+
+/**
+ * Maps a function over the values of the TimeSeries.
+ *
+ * @param f A function that takes a float64 and returns a float64.
+ *
+ * @return A new TimeSeries with the function applied to each value.
+ */
+func (ts *TimeSeries) MapValues(f func(float64) float64) TimeSeries {
+	mapped := Empty()
+	for _, dp := range ts.datapoints {
+		mapped.AddPoint(DataPoint{
+			timestamp: dp.timestamp,
+			value:     f(dp.value),
+		})
+	}
+	return mapped
+}
+
+/**
+ * Filters the TimeSeries based on a predicate function.
+ *
+ * @param f A function that takes a DataPoint and returns a bool indicating whether to include the DataPoint.
+ *
+ * @return A new TimeSeries containing only the DataPoints that satisfy the predicate.
+ */
+func (ts *TimeSeries) Filter(f func(DataPoint) bool) TimeSeries {
+	filtered := Empty()
+	for _, dp := range ts.datapoints {
+		if f(dp) {
+			filtered.AddPoint(dp)
+		}
+	}
+	return filtered
 }
 
 /**

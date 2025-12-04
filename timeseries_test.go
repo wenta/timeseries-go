@@ -29,6 +29,14 @@ func roundToHour(dt time.Time) time.Time {
 	return time.Date(dt.Year(), dt.Month(), dt.Day(), dt.Hour(), 0, 0, 0, dt.Location())
 }
 
+func increment(x float64) float64 {
+	return x + 1.0
+}
+
+func greaterThan15(dp DataPoint) bool {
+	return dp.value > 15.0
+}
+
 func sum(dps []DataPoint) float64 {
 	total := 0.0
 	for _, dp := range dps {
@@ -161,5 +169,84 @@ func TestMax(t *testing.T) {
 
 	if maxVal.value != 20.0 {
 		t.Errorf("Expected max value 20.0, got %f", maxVal.value)
+	}
+}
+
+func TestSlice(t *testing.T) {
+	ts := Empty()
+	now := time.Now()
+
+	start := now.Add(2 * time.Minute)
+	end := now.Add(6 * time.Minute)
+
+	ts.AddPoint(DataPoint{timestamp: now, value: 1.0})
+	ts.AddPoint(DataPoint{timestamp: now.Add(time.Minute), value: -3.0})
+	ts.AddPoint(DataPoint{timestamp: now.Add(2 * time.Minute), value: 6.0})
+	ts.AddPoint(DataPoint{timestamp: now.Add(3 * time.Minute), value: 6.0})
+	ts.AddPoint(DataPoint{timestamp: now.Add(4 * time.Minute), value: 6.0})
+	ts.AddPoint(DataPoint{timestamp: now.Add(5 * time.Minute), value: 8.0})
+	res := ts.Slice(start, end)
+	if res.Length() != 4 {
+		t.Errorf("Expected sliced TimeSeries length 4, got %d", res.Length())
+	}
+
+	if res.datapoints[0].timestamp != start {
+		t.Errorf("Expected first datapoint timestamp %v, got %v", start, res.datapoints[0].timestamp)
+	}
+
+	if res.datapoints[3].timestamp != now.Add(5*time.Minute) {
+		t.Errorf("Expected last datapoint timestamp %v, got %v", now.Add(5*time.Minute), res.datapoints[3].timestamp)
+	}
+}
+
+func TestMap(t *testing.T) {
+	ts := Empty()
+	now := time.Now()
+	ts.AddPoint(DataPoint{now, 10.0})
+	ts.AddPoint(DataPoint{now.Add(5 * time.Minute), 5.0})
+	ts.AddPoint(DataPoint{now.Add(10 * time.Minute), 20.0})
+
+	mapped := ts.MapValues(increment)
+
+	expectedValues := []float64{11.0, 6.0, 21.0}
+	for i, val := range mapped.Values() {
+		if val != expectedValues[i] {
+			t.Errorf("At index %d, expected mapped value %f, got %f", i, expectedValues[i], val)
+		}
+	}
+}
+
+func TestFilter(t *testing.T) {
+	ts := Empty()
+	now := time.Now()
+	ts.AddPoint(DataPoint{now, 10.0})
+	ts.AddPoint(DataPoint{now.Add(5 * time.Minute), 5.0})
+	ts.AddPoint(DataPoint{now.Add(10 * time.Minute), 20.0})
+
+	mapped := ts.Filter(greaterThan15)
+	expectedValues := []float64{20.0}
+	if mapped.Length() != len(expectedValues) {
+		t.Errorf("Expected filtered TimeSeries length %d, got %d", len(expectedValues), mapped.Length())
+	}
+	for i, val := range mapped.Values() {
+		if val != expectedValues[i] {
+			t.Errorf("At index %d, expected filtered value %f, got %f", i, expectedValues[i], val)
+		}
+	}
+}
+
+func TestFilter_ByIndex(t *testing.T) {
+	ts := Empty()
+	now := time.Now()
+	ts.AddPoint(DataPoint{now, 10.0})
+	ts.AddPoint(DataPoint{now.Add(5 * time.Minute), 5.0})
+	ts.AddPoint(DataPoint{now.Add(10 * time.Minute), 20.0})
+
+	mapped := ts.Filter(func(dp DataPoint) bool {
+		return dp.timestamp.Equal(now.Add(5 * time.Minute))
+	})
+	expectedValues := []float64{5.0}
+	if mapped.Length() != len(expectedValues) {
+		t.Errorf("Expected filtered TimeSeries length %d, got %d", len(expectedValues), mapped.Length())
 	}
 }

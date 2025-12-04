@@ -3,8 +3,8 @@
 # Features
 
   * Basic functionality
-    * [ ] Slicing series
-    * [ ] Map, fold and filter
+    * [x] Slicing series
+    * [x] Map and filter
     * [ ] Integration
     * [ ] Differentiation
     * [x] groupBy
@@ -15,7 +15,7 @@
 
   * Calculate statistics
     * [x] Min, max
-    * [ ] Mean, variance and standard deviation
+    * [x] Mean, variance and standard deviation
     * [ ] Covariance and correlation
     * [ ] Normalization
 
