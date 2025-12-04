@@ -137,6 +137,22 @@ func (ts *TimeSeries) Min() (DataPoint, error) {
 }
 
 /**
+ * Calculates the sum of all values in the TimeSeries.
+ *
+ * @return The sum of the values. Returns 0.0 if the TimeSeries is empty.
+ */
+func (ts *TimeSeries) Sum() float64 {
+	if ts.IsEmpty() {
+		return 0.0
+	}
+	sum := 0.0
+	for _, dp := range ts.datapoints {
+		sum += dp.value
+	}
+	return sum
+}
+
+/**
  * Finds the maximum value in the TimeSeries.
  *
  * @return The DataPoint with the maximum value, or an error if the TimeSeries is empty.
