@@ -10,7 +10,8 @@
     * [x] groupBy
     * [ ] Rolling window
     * [ ] Resampling
-    * [ ] Join and merge
+    * [ ] Join 
+    * [x] Merge
 
   * Calculate statistics
     * [x] Min, max
@@ -78,11 +79,6 @@
     * [ ] Z-score / robust z-score based detection
     * [ ] Threshold-based detection on residuals (e.g. from ARIMA or smoothing)
     * [ ] Simple rule-based anomaly flags (spikes, drops, flat-lines)
-
-  * Performance & concurrency
-    * [ ] Batch operations on []float64 / []TimePoint
-    * [ ] Optional parallel processing for long series
-    * [ ] Low-allocation APIs with preallocated buffers
 
   * Advanced functionality
     * [ ] Finding sessions (periods of activity)

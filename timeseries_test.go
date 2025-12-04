@@ -64,6 +64,72 @@ func TestGroupByTime(t *testing.T) {
 	}
 }
 
+func TestMerge(t *testing.T) {
+	ts1 := Empty()
+	ts2 := Empty()
+	expected := Empty()
+
+	ts1.AddPoint(DataPoint{time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC), 10.0})
+	ts1.AddPoint(DataPoint{time.Date(2024, 6, 1, 11, 0, 0, 0, time.UTC), 20.0})
+
+	ts2.AddPoint(DataPoint{time.Date(2024, 6, 1, 10, 30, 0, 0, time.UTC), 15.0})
+	ts2.AddPoint(DataPoint{time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC), 25.0})
+
+	expected.AddPoint(DataPoint{time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC), 10.0})
+	expected.AddPoint(DataPoint{time.Date(2024, 6, 1, 10, 30, 0, 0, time.UTC), 15.0})
+	expected.AddPoint(DataPoint{time.Date(2024, 6, 1, 11, 0, 0, 0, time.UTC), 20.0})
+	expected.AddPoint(DataPoint{time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC), 25.0})
+
+	merged := ts1.Merge(ts2)
+
+	if merged.IsEmpty() {
+		t.Errorf("Expected non-empty merged TimeSeries")
+	}
+	if merged.Length() != expected.Length() {
+		t.Errorf("Expected merged TimeSeries length %d, got %d", expected.Length(), merged.Length())
+	}
+	for i, val := range merged.Values() {
+		if val != expected.Values()[i] {
+			t.Errorf("At index %d, expected value %f, got %f", i, expected.Values()[i], val)
+		}
+	}
+}
+
+func TestMerge_BiggerSeriesWithSmaller(t *testing.T) {
+	ts1 := Empty()
+	ts2 := Empty()
+	expected := Empty()
+
+	ts1.AddPoint(DataPoint{time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC), 10.0})
+	ts1.AddPoint(DataPoint{time.Date(2024, 6, 1, 11, 0, 0, 0, time.UTC), 20.0})
+	ts1.AddPoint(DataPoint{time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC), 30.0})
+
+	ts2.AddPoint(DataPoint{time.Date(2024, 6, 1, 11, 30, 0, 0, time.UTC), 15.0})
+
+	expected.AddPoint(DataPoint{time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC), 10.0})
+	expected.AddPoint(DataPoint{time.Date(2024, 6, 1, 11, 0, 0, 0, time.UTC), 20.0})
+	expected.AddPoint(DataPoint{time.Date(2024, 6, 1, 11, 30, 0, 0, time.UTC), 15.0})
+	expected.AddPoint(DataPoint{time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC), 30.0})
+
+	merged := ts1.Merge(ts2)
+
+	if merged.IsEmpty() {
+		t.Errorf("Expected non-empty merged TimeSeries")
+	}
+	if merged.Length() != expected.Length() {
+		t.Errorf("Expected merged TimeSeries length %d, got %d", expected.Length(), merged.Length())
+	}
+	for i, val := range merged.Values() {
+		if val != expected.Values()[i] {
+			t.Errorf("At index %d, expected value %f, got %f", i, expected.Values()[i], val)
+		}
+	}
+}
+
+/**
+ * Tests for statistics functions
+ */
+
 func TestMin(t *testing.T) {
 	ts := Empty()
 	now := time.Now()

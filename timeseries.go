@@ -77,6 +77,44 @@ func (ts *TimeSeries) GroupByTime(g func(dt time.Time) time.Time, f func(dp []Da
 }
 
 /**
+ * Merges two TimeSeries into one, combining their DataPoints in chronological order.
+ * If both TimeSeries have DataPoints with the same timestamp, the DataPoint from the first TimeSeries is retained.
+ *
+ * @param otherTS The other TimeSeries to merge with.
+ *
+ * @return A new TimeSeries containing all DataPoints from both TimeSeries in chronological order.
+ */
+func (ts *TimeSeries) Merge(otherTS TimeSeries) TimeSeries {
+	merged := Empty()
+	tsi, otsi := 0, 0
+	for tsi < ts.Length() && otsi < otherTS.Length() {
+		if ts.datapoints[tsi].timestamp.Before(otherTS.datapoints[otsi].timestamp) {
+			merged.AddPoint(ts.datapoints[tsi])
+			tsi++
+		} else if ts.datapoints[tsi].timestamp.Equal(otherTS.datapoints[otsi].timestamp) {
+			merged.AddPoint(ts.datapoints[tsi])
+			tsi++
+			otsi++
+		} else {
+			merged.AddPoint(otherTS.datapoints[otsi])
+			otsi++
+		}
+	}
+
+	for tsi < ts.Length() {
+		merged.AddPoint(ts.datapoints[tsi])
+		tsi++
+	}
+
+	for otsi < otherTS.Length() {
+		merged.AddPoint(otherTS.datapoints[otsi])
+		otsi++
+	}
+
+	return merged
+}
+
+/**
 * Statistics
  */
 
