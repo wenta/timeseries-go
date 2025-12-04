@@ -2,6 +2,7 @@ package timeseriesgo
 
 import (
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -36,6 +37,13 @@ func (ts *TimeSeries) Values() []float64 {
 
 func (ts *TimeSeries) AddPoint(dp DataPoint) {
 	ts.datapoints = append(ts.datapoints, dp)
+}
+
+func (ts *TimeSeries) Print() {
+	fmt.Println("Timestamp, Value")
+	for _, dp := range ts.datapoints {
+		fmt.Printf("%s, %.2f\n", dp.timestamp.Format(time.RFC3339), dp.value)
+	}
 }
 
 /**

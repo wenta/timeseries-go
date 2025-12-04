@@ -69,9 +69,9 @@
     * [ ] Streaming read/write from io.Reader / io.Writer
 
   * Generators
-    * [ ] Constant series
+    * [x] Constant series
     * [ ] Random noise
-    * [ ] Random walk
+    * [x] Random walk
     * [ ] Periodic pattern
 
   * Anomaly detection
