@@ -2,7 +2,6 @@ package timeseriesgo
 
 import (
 	"errors"
-	"fmt"
 	"time"
 )
 
@@ -54,11 +53,7 @@ func (ts *TimeSeries) GroupByTime(g func(dt time.Time) time.Time, f func(dp []Da
 			}
 		}
 		var result []DataPoint
-		for i, group := range grouped {
-			for _, dp := range group {
-				fmt.Printf("  %d, %s, %f; ", i, dp.timestamp, dp.value)
-				fmt.Println()
-			}
+		for _, group := range grouped {
 			result = append(result, DataPoint{timestamp: g(group[0].timestamp), value: f(group)})
 
 		}
@@ -72,7 +67,6 @@ func findIndexInGroup(grouped [][]DataPoint, key time.Time) (int, error) {
 			return -1, errors.New("empty group encountered")
 		}
 		if k[0].timestamp.Equal(key) {
-			fmt.Printf("Found key at index %d: %s\n", i, k[0].timestamp)
 			return i, nil
 		}
 	}
