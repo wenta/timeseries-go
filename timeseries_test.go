@@ -63,3 +63,37 @@ func TestGroupByTime(t *testing.T) {
 		}
 	}
 }
+
+func TestMin(t *testing.T) {
+	ts := Empty()
+	now := time.Now()
+	ts.AddPoint(DataPoint{now, 10.0})
+	ts.AddPoint(DataPoint{now.Add(5 * time.Minute), 5.0})
+	ts.AddPoint(DataPoint{now.Add(10 * time.Minute), 20.0})
+
+	minVal, err := ts.Min()
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	if minVal.value != 5.0 {
+		t.Errorf("Expected min value 5.0, got %f", minVal.value)
+	}
+}
+
+func TestMax(t *testing.T) {
+	ts := Empty()
+	now := time.Now()
+	ts.AddPoint(DataPoint{now, 10.0})
+	ts.AddPoint(DataPoint{now.Add(5 * time.Minute), 5.0})
+	ts.AddPoint(DataPoint{now.Add(10 * time.Minute), 20.0})
+
+	maxVal, err := ts.Max()
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	if maxVal.value != 20.0 {
+		t.Errorf("Expected max value 20.0, got %f", maxVal.value)
+	}
+}

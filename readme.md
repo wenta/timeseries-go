@@ -13,7 +13,7 @@
     * [ ] Join and merge
 
   * Calculate statistics
-    * [ ] Min, max
+    * [x] Min, max
     * [ ] Mean, variance and standard deviation
     * [ ] Covariance and correlation
     * [ ] Normalization
