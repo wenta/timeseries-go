@@ -10,7 +10,7 @@
     * [x] groupBy
     * [ ] Rolling window
     * [ ] Resampling
-    * [ ] Join 
+    * [x] Join 
     * [x] Merge
 
   * Calculate statistics

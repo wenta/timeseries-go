@@ -233,6 +233,91 @@ func (ts *TimeSeries) Join(otherTS TimeSeries) AlignedSeries {
 }
 
 /**
+ * Joins (Left) two TimeSeries on their timestamps.
+ *
+ * @param otherTS The other TimeSeries to join with.
+ * @param defaultValue The default value to use for missing right-side DataPoints.
+ *
+ * @return A AlignedSeries containing DataPoints from the left TimeSeries and matching DataPoints from the right TimeSeries, using defaultValue for missing matches.
+ */
+func (ts *TimeSeries) JoinLeft(otherTS TimeSeries, defaultValue float64) AlignedSeries {
+	if ts.IsEmpty() {
+		return AlignedSeries{}
+	} else {
+		res := AlignedSeries{}
+
+		for _, leftValue := range ts.datapoints {
+			matched := false
+			for _, rightValue := range otherTS.datapoints {
+				if leftValue.timestamp.Equal(rightValue.timestamp) {
+					res.datapoints = append(res.datapoints, DoubleDataPoint{
+						timestamp:  leftValue.timestamp,
+						leftValue:  leftValue.value,
+						rightValue: rightValue.value,
+					})
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				res.datapoints = append(res.datapoints, DoubleDataPoint{
+					timestamp:  leftValue.timestamp,
+					leftValue:  leftValue.value,
+					rightValue: defaultValue,
+				})
+			}
+		}
+		return res
+	}
+}
+
+func (ts *TimeSeries) JoinOuter(otherTS TimeSeries, defaultLeftValue float64, defaultRightValue float64) AlignedSeries {
+	if ts.IsEmpty() && otherTS.IsEmpty() {
+		return AlignedSeries{}
+	} else {
+		res := AlignedSeries{}
+		for _, leftValue := range ts.datapoints {
+			matched := false
+			for _, rightValue := range otherTS.datapoints {
+				if leftValue.timestamp.Equal(rightValue.timestamp) {
+					res.datapoints = append(res.datapoints, DoubleDataPoint{
+						timestamp:  leftValue.timestamp,
+						leftValue:  leftValue.value,
+						rightValue: rightValue.value,
+					})
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				res.datapoints = append(res.datapoints, DoubleDataPoint{
+					timestamp:  leftValue.timestamp,
+					leftValue:  leftValue.value,
+					rightValue: defaultRightValue,
+				})
+			}
+		}
+		for _, rightValue := range otherTS.datapoints {
+			matched := false
+			for _, leftValue := range ts.datapoints {
+				if rightValue.timestamp.Equal(leftValue.timestamp) {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				res.datapoints = append(res.datapoints, DoubleDataPoint{
+					timestamp:  rightValue.timestamp,
+					leftValue:  defaultLeftValue,
+					rightValue: rightValue.value,
+				})
+			}
+		}
+		return res
+	}
+}
+
+/**
 * Statistics
  */
 

@@ -250,3 +250,90 @@ func TestFilter_ByIndex(t *testing.T) {
 		t.Errorf("Expected filtered TimeSeries length %d, got %d", len(expectedValues), mapped.Length())
 	}
 }
+
+func TestJoin(t *testing.T) {
+	ts1 := Empty()
+	ts2 := Empty()
+	expected := AlignedSeries{}
+
+	ts1.AddPoint(DataPoint{time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC), 10.0})
+	ts1.AddPoint(DataPoint{time.Date(2024, 6, 1, 11, 0, 0, 0, time.UTC), 20.0})
+
+	ts2.AddPoint(DataPoint{time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC), 15.0})
+	ts2.AddPoint(DataPoint{time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC), 25.0})
+
+	expected.datapoints = []DoubleDataPoint{
+		{time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC), 10.0, 15.0},
+	}
+
+	joined := ts1.Join(ts2)
+
+	if joined.Length() != len(expected.datapoints) {
+		t.Errorf("Expected joined AlignedSeries length %d, got %d", len(expected.datapoints), joined.Length())
+	}
+	for i, dp := range joined.datapoints {
+		expDp := expected.datapoints[i]
+		if !dp.timestamp.Equal(expDp.timestamp) || dp.leftValue != expDp.leftValue || dp.rightValue != expDp.rightValue {
+			t.Errorf("At index %d, expected datapoint %+v, got %+v", i, expDp, dp)
+		}
+	}
+}
+
+func TestJoinLeft(t *testing.T) {
+	ts1 := Empty()
+	ts2 := Empty()
+	expected := AlignedSeries{}
+
+	ts1.AddPoint(DataPoint{time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC), 10.0})
+	ts1.AddPoint(DataPoint{time.Date(2024, 6, 1, 11, 0, 0, 0, time.UTC), 20.0})
+
+	ts2.AddPoint(DataPoint{time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC), 15.0})
+	ts2.AddPoint(DataPoint{time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC), 25.0})
+
+	expected.datapoints = []DoubleDataPoint{
+		{time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC), 10.0, 15.0},
+		{time.Date(2024, 6, 1, 11, 0, 0, 0, time.UTC), 20.0, 0.0},
+	}
+
+	joined := ts1.JoinLeft(ts2, 0.0)
+
+	if joined.Length() != len(expected.datapoints) {
+		t.Errorf("Expected joined AlignedSeries length %d, got %d", len(expected.datapoints), joined.Length())
+	}
+	for i, dp := range joined.datapoints {
+		expDp := expected.datapoints[i]
+		if !dp.timestamp.Equal(expDp.timestamp) || dp.leftValue != expDp.leftValue || dp.rightValue != expDp.rightValue {
+			t.Errorf("At index %d, expected datapoint %+v, got %+v", i, expDp, dp)
+		}
+	}
+}
+
+func TestJoinOuter(t *testing.T) {
+	ts1 := Empty()
+	ts2 := Empty()
+	expected := AlignedSeries{}
+
+	ts1.AddPoint(DataPoint{time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC), 10.0})
+	ts1.AddPoint(DataPoint{time.Date(2024, 6, 1, 11, 0, 0, 0, time.UTC), 20.0})
+
+	ts2.AddPoint(DataPoint{time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC), 15.0})
+	ts2.AddPoint(DataPoint{time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC), 25.0})
+
+	expected.datapoints = []DoubleDataPoint{
+		{time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC), 10.0, 15.0},
+		{time.Date(2024, 6, 1, 11, 0, 0, 0, time.UTC), 20.0, 0.0},
+		{time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC), 0.0, 25.0},
+	}
+
+	joined := ts1.JoinOuter(ts2, 0.0, 0.0)
+
+	if joined.Length() != len(expected.datapoints) {
+		t.Errorf("Expected joined AlignedSeries length %d, got %d", len(expected.datapoints), joined.Length())
+	}
+	for i, dp := range joined.datapoints {
+		expDp := expected.datapoints[i]
+		if !dp.timestamp.Equal(expDp.timestamp) || dp.leftValue != expDp.leftValue || dp.rightValue != expDp.rightValue {
+			t.Errorf("At index %d, expected datapoint %+v, got %+v", i, expDp, dp)
+		}
+	}
+}
