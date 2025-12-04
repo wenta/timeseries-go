@@ -47,7 +47,7 @@
     * [ ] Feature generation for ML (lags, rolling features, calendar features)
 
   * Metrics
-    * [ ] MSE and RMSE between 2 series
+    * [x] MSE and RMSE between 2 series
     * [ ] MAE between 2 series
     * [ ] MAPE between 2 series
     * [ ] MAD between 2 series

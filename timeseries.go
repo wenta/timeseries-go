@@ -201,6 +201,38 @@ func (ts *TimeSeries) Merge(otherTS TimeSeries) TimeSeries {
 }
 
 /**
+ * Joins
+ */
+
+/**
+ * Joins (Inner) two TimeSeries on their timestamps.
+ *
+ * @param otherTS The other TimeSeries to join with.
+ *
+ * @return A AlignedSeries containing DataPoints with matching timestamps from both TimeSeries.
+ */
+func (ts *TimeSeries) Join(otherTS TimeSeries) AlignedSeries {
+	if ts.IsEmpty() || otherTS.IsEmpty() {
+		return AlignedSeries{}
+	} else {
+		res := AlignedSeries{}
+
+		for _, leftValue := range ts.datapoints {
+			for _, rightValue := range otherTS.datapoints {
+				if leftValue.timestamp.Equal(rightValue.timestamp) {
+					res.datapoints = append(res.datapoints, DoubleDataPoint{
+						timestamp:  leftValue.timestamp,
+						leftValue:  leftValue.value,
+						rightValue: rightValue.value,
+					})
+				}
+			}
+		}
+		return res
+	}
+}
+
+/**
 * Statistics
  */
 
