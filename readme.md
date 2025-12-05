@@ -48,7 +48,7 @@
 
   * Metrics
     * [x] MSE and RMSE between 2 series
-    * [ ] MAE between 2 series
+    * [x] MAE between 2 series
     * [ ] MAPE between 2 series
     * [ ] MAD between 2 series
 
@@ -59,7 +59,7 @@
     * [ ] MA(q) – Moving average
 
   * Forecasting (beyond ARIMA)
-    * [ ] Naive forecast (last value, seasonal naive)
+    * [x] Naive forecast (last value, seasonal naive)
     * [ ] Simple / double / triple exponential smoothing (Holt–Winters)
     * [ ] Time-series cross-validation (walk-forward validation)
 

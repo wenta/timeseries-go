@@ -35,6 +35,35 @@ func (ts *TimeSeries) Values() []float64 {
 	return res
 }
 
+func (ts *TimeSeries) Timestamps() []time.Time {
+	var res []time.Time
+	for _, dp := range ts.datapoints {
+		res = append(res, dp.timestamp)
+	}
+	return res
+}
+
+func (ts *TimeSeries) Last() (DataPoint, error) {
+	if ts.IsEmpty() {
+		return DataPoint{}, errors.New("timeSeries is empty")
+	}
+	return ts.datapoints[len(ts.datapoints)-1], nil
+}
+
+func (ts *TimeSeries) Head() (DataPoint, error) {
+	if ts.IsEmpty() {
+		return DataPoint{}, errors.New("timeSeries is empty")
+	}
+	return ts.datapoints[0], nil
+}
+
+func (ts *TimeSeries) Tail() TimeSeries {
+	if ts.IsEmpty() {
+		return Empty()
+	}
+	return TimeSeries{datapoints: ts.datapoints[1:]}
+}
+
 /**
  * Adds a DataPoint to the TimeSeries.
  *
