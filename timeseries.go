@@ -145,6 +145,14 @@ func (ts *TimeSeries) MapValues(f func(float64) float64) TimeSeries {
 	return mapped
 }
 
+func (ts *TimeSeries) Map(f func(DataPoint) DataPoint) TimeSeries {
+	mapped := Empty()
+	for _, dp := range ts.datapoints {
+		mapped.AddPoint(f(dp))
+	}
+	return mapped
+}
+
 /**
  * Filters the TimeSeries based on a predicate function.
  *
@@ -190,6 +198,16 @@ func (ts *TimeSeries) GroupByTime(g func(dt time.Time) time.Time, f func(dp []Da
 		}
 		return TimeSeries{result}
 	}
+}
+
+func (ts TimeSeries) RollingWindow(window time.Duration, f func(vs []float64) float64) TimeSeries {
+	return ts.Map(func(dp DataPoint) DataPoint {
+		ws := ts.Filter(func(dp2 DataPoint) bool {
+			return (dp2.timestamp.Before(dp.timestamp) && dp2.timestamp.After(dp.timestamp.Add(-window))) || dp2.timestamp.Equal(dp.timestamp)
+		})
+		v := f(ws.Values())
+		return DataPoint{dp.timestamp, v}
+	})
 }
 
 /**

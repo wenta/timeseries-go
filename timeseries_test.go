@@ -370,3 +370,39 @@ func TestMedian(t *testing.T) {
 		t.Errorf("Expected median value was %f, got ", m2)
 	}
 }
+
+func TestRollingWindow(t *testing.T) {
+	ts := Empty()
+	expected := Empty()
+	now := time.Now()
+
+	ts.AddPoint(DataPoint{timestamp: now, value: 1.0})
+	ts.AddPoint(DataPoint{timestamp: now.Add(10 * time.Minute), value: 2})
+	ts.AddPoint(DataPoint{timestamp: now.Add(30 * time.Minute), value: 3.0})
+	ts.AddPoint(DataPoint{timestamp: now.Add(50 * time.Minute), value: 4.0})
+	ts.AddPoint(DataPoint{timestamp: now.Add(80 * time.Minute), value: 5.0})
+
+	expected.AddPoint(DataPoint{timestamp: now, value: 1.0})
+	expected.AddPoint(DataPoint{timestamp: now.Add(10 * time.Minute), value: 3.0})
+	expected.AddPoint(DataPoint{timestamp: now.Add(30 * time.Minute), value: 6.0})
+	expected.AddPoint(DataPoint{timestamp: now.Add(50 * time.Minute), value: 10.0})
+	expected.AddPoint(DataPoint{timestamp: now.Add(80 * time.Minute), value: 12.0})
+
+	rwts := ts.RollingWindow(time.Hour, func(vs []float64) float64 {
+		res := 0.0
+		for _, v := range vs {
+			res += v
+		}
+		return res
+	})
+
+	if rwts.Length() != len(expected.datapoints) {
+		t.Errorf("Expected length %d, got %d", len(expected.datapoints), rwts.Length())
+	}
+	for i, dp := range rwts.datapoints {
+		expDp := expected.datapoints[i]
+		if !dp.timestamp.Equal(expDp.timestamp) || dp.value != expDp.value {
+			t.Errorf("At index %d, expected datapoint %+v, got %+v", i, expDp, dp)
+		}
+	}
+}

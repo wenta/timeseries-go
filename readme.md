@@ -8,7 +8,7 @@
     * [ ] Integration
     * [ ] Differentiation
     * [x] groupBy
-    * [ ] Rolling window
+    * [x] Rolling window
     * [ ] Resampling
     * [x] Join 
     * [x] Merge
