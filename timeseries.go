@@ -3,6 +3,7 @@ package timeseriesgo
 import (
 	"errors"
 	"fmt"
+	"math"
 	"time"
 )
 
@@ -400,6 +401,31 @@ func (ts *TimeSeries) Max() (DataPoint, error) {
 		}
 	}
 	return maxDP, nil
+}
+
+func (ts *TimeSeries) Percentile(p int) (float64, error) {
+	if ts.IsEmpty() {
+		return 0.0, errors.New("timeseries is empty")
+	}
+	vs := ts.Values()
+	vsLen := len(vs)
+	pos := float64(p*(vsLen+1)) / 100
+	if pos < 1 {
+		return vs[0], nil
+	} else if pos >= float64(vsLen) {
+		return vs[vsLen-1], nil
+	} else {
+		pf := int(math.Floor(pos))
+		lower := vs[pf-1]
+		upper := vs[pf]
+		d := pos - math.Floor(pos)
+		p := lower + d*(upper-lower)
+		return p, nil
+	}
+}
+
+func (ts *TimeSeries) Median() (float64, error) {
+	return ts.Percentile(50)
 }
 
 func findIndexInGroup(grouped [][]DataPoint, key time.Time) (int, error) {

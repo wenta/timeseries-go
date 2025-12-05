@@ -74,3 +74,18 @@ func MAE(ts1, ts2 TimeSeries) (float64, error) {
 		}
 	}
 }
+
+func MAD(ts TimeSeries) (float64, error) {
+	if ts.IsEmpty() {
+		return 0.0, errors.New("timeseries is empty")
+	} else {
+		median, err := ts.Median()
+		if err != nil {
+			return 0.0, err
+		}
+		deviations := ts.MapValues(func(x float64) float64 {
+			return math.Abs(x - median)
+		})
+		return deviations.Median()
+	}
+}

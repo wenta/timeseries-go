@@ -337,3 +337,36 @@ func TestJoinOuter(t *testing.T) {
 		}
 	}
 }
+
+func TestMedian(t *testing.T) {
+	ts := Empty()
+	now := time.Now()
+
+	ts.AddPoint(DataPoint{timestamp: now, value: 1.0})
+	ts.AddPoint(DataPoint{timestamp: now.Add(time.Minute), value: 2})
+	ts.AddPoint(DataPoint{timestamp: now.Add(2 * time.Minute), value: 3.0})
+	ts.AddPoint(DataPoint{timestamp: now.Add(3 * time.Minute), value: 4.0})
+	ts.AddPoint(DataPoint{timestamp: now.Add(4 * time.Minute), value: 5.0})
+
+	m, err := ts.Median()
+
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	if m != 3.0 {
+		t.Errorf("Expected median value was %f, got ", m)
+	}
+
+	ts.AddPoint(DataPoint{timestamp: now.Add(5 * time.Minute), value: 6.0})
+
+	m2, err2 := ts.Median()
+
+	if err2 != nil {
+		t.Errorf("Unexpected error: %v", err2)
+	}
+
+	if m2 != 3.5 {
+		t.Errorf("Expected median value was %f, got ", m2)
+	}
+}

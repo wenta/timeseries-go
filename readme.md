@@ -50,7 +50,7 @@
     * [x] MSE and RMSE between 2 series
     * [x] MAE between 2 series
     * [ ] MAPE between 2 series
-    * [ ] MAD between 2 series
+    * [x] MAD on series
 
   * ARIMA
     * [ ] Check if series is stationary
@@ -76,7 +76,7 @@
     * [ ] Periodic pattern
 
   * Anomaly detection
-    * [ ] Z-score / robust z-score based detection
+    * [x] Z-score / robust z-score based detection
     * [ ] Threshold-based detection on residuals (e.g. from ARIMA or smoothing)
     * [ ] Simple rule-based anomaly flags (spikes, drops, flat-lines)
 

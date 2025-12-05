@@ -21,12 +21,16 @@ func TestMeanAndVariance(t *testing.T) {
 	}
 
 	expectedMean := 4.0
-	expectedVariance := 14.333333
+	expectedSampleVariance := 17.2
+	expectedPopulationVariance := 14.333333
 
 	if mv.mean != expectedMean {
 		t.Errorf("Expected mean %f, got %f", expectedMean, mv.mean)
 	}
-	if mv.variance-expectedVariance > 0.0001 {
-		t.Errorf("Expected variance %f, got %f", expectedVariance, mv.variance)
+	if mv.sampleVariance-expectedSampleVariance > 0.0001 {
+		t.Errorf("Expected sample variance %f, got %f", expectedSampleVariance, mv.sampleVariance)
+	}
+	if mv.populationVariance-expectedPopulationVariance > 0.0001 {
+		t.Errorf("Expected population variance %f, got %f", expectedPopulationVariance, mv.populationVariance)
 	}
 }
