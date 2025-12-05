@@ -57,3 +57,28 @@ func TestRMSE(t *testing.T) {
 		t.Errorf("Expected RMSE %f, got %f", expectedRMSE, rmse)
 	}
 }
+
+func TestMAE(t *testing.T) {
+	ts1 := Empty()
+	ts2 := Empty()
+	expected := 1.0
+
+	ts1.AddPoint(DataPoint{time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC), 1.0})
+	ts1.AddPoint(DataPoint{time.Date(2024, 6, 1, 11, 0, 0, 0, time.UTC), 2.0})
+	ts1.AddPoint(DataPoint{time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC), 3.0})
+	ts1.AddPoint(DataPoint{time.Date(2024, 6, 1, 13, 0, 0, 0, time.UTC), 2.0})
+	ts1.AddPoint(DataPoint{time.Date(2024, 6, 1, 14, 0, 0, 0, time.UTC), 4.0})
+
+	ts2.AddPoint(DataPoint{time.Date(2024, 6, 1, 11, 0, 0, 0, time.UTC), 2.0})
+	ts2.AddPoint(DataPoint{time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC), 4.0})
+	ts2.AddPoint(DataPoint{time.Date(2024, 6, 1, 13, 0, 0, 0, time.UTC), 5.0})
+	ts2.AddPoint(DataPoint{time.Date(2024, 6, 1, 14, 0, 0, 0, time.UTC), 5.0})
+	mae, err := MAE(ts1, ts2)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	if mae != expected {
+		t.Errorf("Expected MAE %f, got %f", expected, mae)
+	}
+}
