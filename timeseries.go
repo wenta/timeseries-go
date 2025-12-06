@@ -28,6 +28,9 @@ func (ts *TimeSeries) Length() int {
 	return len(ts.datapoints)
 }
 
+/**
+ * Returns the values of all points.
+ */
 func (ts *TimeSeries) Values() []float64 {
 	var res []float64
 	for _, dp := range ts.datapoints {
@@ -36,6 +39,9 @@ func (ts *TimeSeries) Values() []float64 {
 	return res
 }
 
+/**
+ * Returns all timestamps.
+ */
 func (ts *TimeSeries) Timestamps() []time.Time {
 	var res []time.Time
 	for _, dp := range ts.datapoints {
@@ -44,6 +50,9 @@ func (ts *TimeSeries) Timestamps() []time.Time {
 	return res
 }
 
+/**
+ * Returns the last point in the series.
+ */
 func (ts *TimeSeries) Last() (DataPoint, error) {
 	if ts.IsEmpty() {
 		return DataPoint{}, errors.New("timeSeries is empty")
@@ -51,6 +60,9 @@ func (ts *TimeSeries) Last() (DataPoint, error) {
 	return ts.datapoints[len(ts.datapoints)-1], nil
 }
 
+/**
+ * Returns the first point in the series.
+ */
 func (ts *TimeSeries) Head() (DataPoint, error) {
 	if ts.IsEmpty() {
 		return DataPoint{}, errors.New("timeSeries is empty")
@@ -58,11 +70,43 @@ func (ts *TimeSeries) Head() (DataPoint, error) {
 	return ts.datapoints[0], nil
 }
 
+/**
+ * Returns the series without the first point.
+ */
 func (ts *TimeSeries) Tail() TimeSeries {
 	if ts.IsEmpty() {
 		return Empty()
 	}
 	return TimeSeries{datapoints: ts.datapoints[1:]}
+}
+
+/**
+ * Most frequent interval between consecutive points.
+ */
+func (ts *TimeSeries) Resolution() (time.Duration, error) {
+	if ts.IsEmpty() {
+		return 0 * time.Second, errors.New("timeSeries is empty")
+	} else if ts.Length() == 1 {
+		return 0 * time.Second, errors.New("timeSeries has just one point")
+	}
+
+	var modeDuration time.Duration
+	var modeCount int
+	counts := make(map[time.Duration]int)
+
+	for i := 1; i < len(ts.datapoints); i++ {
+		d := ts.datapoints[i].timestamp.Sub(ts.datapoints[i-1].timestamp)
+		counts[d]++
+	}
+
+	for d, c := range counts {
+		if c > modeCount || (c == modeCount && (modeCount == 0 || d < modeDuration)) {
+			modeCount = c
+			modeDuration = d
+		}
+	}
+
+	return modeDuration, nil
 }
 
 /**
@@ -117,6 +161,9 @@ func Zip(timestamps []time.Time, values []float64) (TimeSeries, error) {
 	return TimeSeries{datapoints: points}, nil
 }
 
+/**
+ * Splits the series into separate slices of timestamps and values.
+ */
 func (ts *TimeSeries) UnZip() ([]time.Time, []float64) {
 	timestamps := make([]time.Time, len(ts.datapoints))
 	values := make([]float64, len(ts.datapoints))
@@ -145,6 +192,9 @@ func (ts *TimeSeries) MapValues(f func(float64) float64) TimeSeries {
 	return mapped
 }
 
+/**
+ * Maps over the full DataPoint.
+ */
 func (ts *TimeSeries) Map(f func(DataPoint) DataPoint) TimeSeries {
 	mapped := Empty()
 	for _, dp := range ts.datapoints {
@@ -249,11 +299,7 @@ func (ts *TimeSeries) Merge(otherTS TimeSeries) TimeSeries {
 }
 
 /**
- * Joins
- */
-
-/**
- * Joins (Inner) two TimeSeries on their timestamps.
+ * Joins (inner) two TimeSeries on their timestamps.
  *
  * @param otherTS The other TimeSeries to join with.
  *
@@ -281,7 +327,7 @@ func (ts *TimeSeries) Join(otherTS TimeSeries) AlignedSeries {
 }
 
 /**
- * Joins (Left) two TimeSeries on their timestamps.
+ * Joins (left) two TimeSeries on their timestamps, filling missing right values with a default.
  *
  * @param otherTS The other TimeSeries to join with.
  * @param defaultValue The default value to use for missing right-side DataPoints.
@@ -319,6 +365,9 @@ func (ts *TimeSeries) JoinLeft(otherTS TimeSeries, defaultValue float64) Aligned
 	}
 }
 
+/**
+ * Joins (outer) two TimeSeries on their timestamps, filling missing values with defaults.
+ */
 func (ts *TimeSeries) JoinOuter(otherTS TimeSeries, defaultLeftValue float64, defaultRightValue float64) AlignedSeries {
 	if ts.IsEmpty() && otherTS.IsEmpty() {
 		return AlignedSeries{}

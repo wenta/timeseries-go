@@ -199,6 +199,26 @@ func TestSlice(t *testing.T) {
 	}
 }
 
+func TestResolution(t *testing.T) {
+	ts := Empty()
+	base := time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC)
+
+	ts.AddPoint(DataPoint{timestamp: base, value: 1})
+	ts.AddPoint(DataPoint{timestamp: base.Add(time.Minute), value: 2})
+	ts.AddPoint(DataPoint{timestamp: base.Add(2 * time.Minute), value: 3})
+	ts.AddPoint(DataPoint{timestamp: base.Add(4 * time.Minute), value: 4})
+
+	res, err := ts.Resolution()
+	if err != nil {
+		t.Fatalf("Unexpected error computing resolution: %v", err)
+	}
+
+	if res != time.Minute {
+		t.Errorf("Expected resolution 1m, got %v", res)
+	}
+}
+
+
 func TestMap(t *testing.T) {
 	ts := Empty()
 	now := time.Now()

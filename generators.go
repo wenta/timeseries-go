@@ -66,3 +66,25 @@ func RandomWalk(index []time.Time, startValue float64) TimeSeries {
 	}
 	return ts
 }
+
+func Repeat(pattern TimeSeries, start time.Time, end time.Time) TimeSeries {
+	if pattern.IsEmpty() {
+		return Empty()
+	} else {
+		ts := Empty()
+		resolution, err := pattern.Resolution()
+		if err != nil {
+			return pattern
+		}
+		i := 0
+		vs := pattern.Values()
+		for now := start; now.Before(end); now = now.Add(resolution) {
+			if i == pattern.Length() {
+				i = 0
+			}
+			ts.AddPoint(DataPoint{now, vs[i]})
+			i++
+		}
+		return ts
+	}
+}

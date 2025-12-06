@@ -50,3 +50,45 @@ func TestGenerateRandomWalk(t *testing.T) {
 	}
 
 }
+
+func TestRepeat(t *testing.T) {
+	base := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	pattern := Empty()
+	pattern.AddPoint(DataPoint{timestamp: base, value: 1})
+	pattern.AddPoint(DataPoint{timestamp: base.Add(time.Minute), value: 2})
+
+	start := base
+	end := base.Add(5 * time.Minute)
+
+	repeated := Repeat(pattern, start, end)
+
+	if repeated.Length() != 5 {
+		t.Fatalf("Expected repeated length 5, got %d", repeated.Length())
+	}
+
+	expectedValues := []float64{1, 2, 1, 2, 1}
+	for i, dp := range repeated.datapoints {
+		expectedTs := start.Add(time.Duration(i) * time.Minute)
+		if !dp.timestamp.Equal(expectedTs) {
+			t.Errorf("At idx %d expected timestamp %v, got %v", i, expectedTs, dp.timestamp)
+		}
+		if dp.value != expectedValues[i] {
+			t.Errorf("At idx %d expected value %.0f, got %.0f", i, expectedValues[i], dp.value)
+		}
+	}
+}
+
+func TestRepeatSinglePointPattern(t *testing.T) {
+	base := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	pattern := Empty()
+	pattern.AddPoint(DataPoint{timestamp: base, value: 5})
+
+	repeated := Repeat(pattern, base, base.Add(10*time.Minute))
+
+	if repeated.Length() != 1 {
+		t.Fatalf("Expected pattern returned unchanged with length 1, got %d", repeated.Length())
+	}
+	if repeated.datapoints[0].timestamp != base || repeated.datapoints[0].value != 5 {
+		t.Errorf("Expected original datapoint preserved, got %+v", repeated.datapoints[0])
+	}
+}

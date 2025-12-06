@@ -73,7 +73,7 @@
     * [x] Constant series
     * [ ] Random noise
     * [x] Random walk
-    * [ ] Periodic pattern
+    * [x] Periodic pattern
 
   * Anomaly detection
     * [x] Z-score / robust z-score based detection
