@@ -77,7 +77,9 @@ func (ts *TimeSeries) Tail() TimeSeries {
 	if ts.IsEmpty() {
 		return Empty()
 	}
-	return TimeSeries{datapoints: ts.datapoints[1:]}
+	cloned := make([]DataPoint, len(ts.datapoints)-1)
+	copy(cloned, ts.datapoints[1:])
+	return TimeSeries{datapoints: cloned}
 }
 
 /**

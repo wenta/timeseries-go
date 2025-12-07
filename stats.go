@@ -1,6 +1,9 @@
 package timeseriesgo
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
 type MeanAndVariance struct {
 	mean               float64
@@ -34,4 +37,38 @@ func (ts *TimeSeries) GetMeanAndVariance() (MeanAndVariance, error) {
 			populationVariance: populationVariance,
 		}, nil
 	}
+}
+
+func (ts *TimeSeries) MovingAverage(window time.Duration) TimeSeries {
+	if ts.IsEmpty() {
+		return Empty()
+	}
+
+	if window <= 0 {
+		cloned := make([]DataPoint, len(ts.datapoints))
+		copy(cloned, ts.datapoints)
+		return TimeSeries{datapoints: cloned}
+	}
+
+	result := Empty()
+	left := 0
+	runningSum := 0.0
+
+	for right, dp := range ts.datapoints {
+		runningSum += dp.value
+
+		// Maintain window (t-window, t] to match RollingWindow semantics.
+		for left <= right && dp.timestamp.Sub(ts.datapoints[left].timestamp) >= window {
+			runningSum -= ts.datapoints[left].value
+			left++
+		}
+
+		count := right - left + 1
+		result.AddPoint(DataPoint{
+			timestamp: dp.timestamp,
+			value:     runningSum / float64(count),
+		})
+	}
+
+	return result
 }
