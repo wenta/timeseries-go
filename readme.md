@@ -1,4 +1,9 @@
 
+# Welcome to the Time Series library
+
+Library for processing Time Series.
+
+Package docs: https://pkg.go.dev/github.com/wenta/timeseries-go
 
 # Features
 
@@ -81,3 +86,12 @@
   * Advanced functionality
     * [ ] Finding sessions (periods of activity)
     * [ ] Labeling events/windows (e.g. storms, campaigns, outages)
+
+
+# Join in!
+
+We are happy to receive bug reports, fixes, documentation enhancements,
+and other improvements.
+
+Please report bugs via the
+[github issue tracker](http://github.com/wenta/timeseries-go/issues).
