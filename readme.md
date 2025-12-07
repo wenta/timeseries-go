@@ -64,10 +64,8 @@
     * [ ] Time-series cross-validation (walk-forward validation)
 
   * IO & interoperability
-    * [ ] Read data to/from CSV string
-    * [ ] Read/write CSV files
+    * [x] Read data to/from CSV string
     * [ ] Read/write JSON (e.g. NDJSON)
-    * [ ] Streaming read/write from io.Reader / io.Writer
 
   * Generators
     * [x] Constant series
