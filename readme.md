@@ -81,7 +81,7 @@ Package docs: https://pkg.go.dev/github.com/wenta/timeseries-go
   * Anomaly detection
     * [x] Z-score / robust z-score based detection
     * [ ] Threshold-based detection on residuals (e.g. from ARIMA or smoothing)
-    * [ ] Simple rule-based anomaly flags (spikes, drops, flat-lines)
+    * [x] Simple rule-based anomaly flags (spikes, drops, flat-lines)
 
   * Advanced functionality
     * [ ] Finding sessions (periods of activity)

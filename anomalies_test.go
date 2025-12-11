@@ -76,3 +76,66 @@ func TestRobustZScore(t *testing.T) {
 		}
 	}
 }
+
+func TestFindSpikeAnomalies(t *testing.T) {
+	ts := Empty()
+	now := time.Now()
+	values := []float64{10, 11, 30, 29, 29, 29, 20, 21}
+	for i, v := range values {
+		ts.AddPoint(DataPoint{timestamp: now.Add(time.Duration(i) * time.Minute), value: v})
+	}
+
+	anomalies, err := FindSpikeAnomalies(ts, 10)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	expected := []float64{0, 0, 1, 0, 0, 0, 0, 0}
+	for i, dp := range anomalies.datapoints {
+		if dp.value != expected[i] {
+			t.Errorf("At index %d: expected Anomaly value %f, got %f", i, expected[i], dp.value)
+		}
+	}
+}
+
+func TestFindDropAnomalies(t *testing.T) {
+	ts := Empty()
+	now := time.Now()
+	values := []float64{10, 11, 30, 29, 29, 29, 20, 21}
+	for i, v := range values {
+		ts.AddPoint(DataPoint{timestamp: now.Add(time.Duration(i) * time.Minute), value: v})
+	}
+
+	anomalies, err := FindDropAnomalies(ts, 8)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	expected := []float64{0, 0, 0, 0, 0, 0, 1, 0}
+	for i, dp := range anomalies.datapoints {
+		if dp.value != expected[i] {
+			t.Errorf("At index %d: expected Anomaly value %f, got %f", i, expected[i], dp.value)
+		}
+	}
+}
+
+func TestFindFlatlineAnomalies(t *testing.T) {
+	ts := Empty()
+	now := time.Now()
+	values := []float64{10, 11, 30, 29, 29, 29, 20, 21}
+	for i, v := range values {
+		ts.AddPoint(DataPoint{timestamp: now.Add(time.Duration(i) * time.Minute), value: v})
+	}
+
+	anomalies, err := FindFlatlineAnomalies(ts, 0.01, 3)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	expected := []float64{0, 0, 0, 1, 1, 1, 0, 0}
+	for i, dp := range anomalies.datapoints {
+		if dp.value != expected[i] {
+			t.Errorf("At index %d: expected Anomaly value %f, got %f", i, expected[i], dp.value)
+		}
+	}
+}
