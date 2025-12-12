@@ -34,13 +34,13 @@ func increment(x float64) float64 {
 }
 
 func greaterThan15(dp DataPoint) bool {
-	return dp.value > 15.0
+	return dp.Value > 15.0
 }
 
 func sum(dps []DataPoint) float64 {
 	total := 0.0
 	for _, dp := range dps {
-		total += dp.value
+		total += dp.Value
 	}
 	return total
 }
@@ -150,8 +150,8 @@ func TestMin(t *testing.T) {
 		t.Errorf("Unexpected error: %v", err)
 	}
 
-	if minVal.value != 5.0 {
-		t.Errorf("Expected min value 5.0, got %f", minVal.value)
+	if minVal.Value != 5.0 {
+		t.Errorf("Expected min value 5.0, got %f", minVal.Value)
 	}
 }
 
@@ -167,8 +167,8 @@ func TestMax(t *testing.T) {
 		t.Errorf("Unexpected error: %v", err)
 	}
 
-	if maxVal.value != 20.0 {
-		t.Errorf("Expected max value 20.0, got %f", maxVal.value)
+	if maxVal.Value != 20.0 {
+		t.Errorf("Expected max value 20.0, got %f", maxVal.Value)
 	}
 }
 
@@ -179,23 +179,23 @@ func TestSlice(t *testing.T) {
 	start := now.Add(2 * time.Minute)
 	end := now.Add(6 * time.Minute)
 
-	ts.AddPoint(DataPoint{timestamp: now, value: 1.0})
-	ts.AddPoint(DataPoint{timestamp: now.Add(time.Minute), value: -3.0})
-	ts.AddPoint(DataPoint{timestamp: now.Add(2 * time.Minute), value: 6.0})
-	ts.AddPoint(DataPoint{timestamp: now.Add(3 * time.Minute), value: 6.0})
-	ts.AddPoint(DataPoint{timestamp: now.Add(4 * time.Minute), value: 6.0})
-	ts.AddPoint(DataPoint{timestamp: now.Add(5 * time.Minute), value: 8.0})
+	ts.AddPoint(DataPoint{Timestamp: now, Value: 1.0})
+	ts.AddPoint(DataPoint{Timestamp: now.Add(time.Minute), Value: -3.0})
+	ts.AddPoint(DataPoint{Timestamp: now.Add(2 * time.Minute), Value: 6.0})
+	ts.AddPoint(DataPoint{Timestamp: now.Add(3 * time.Minute), Value: 6.0})
+	ts.AddPoint(DataPoint{Timestamp: now.Add(4 * time.Minute), Value: 6.0})
+	ts.AddPoint(DataPoint{Timestamp: now.Add(5 * time.Minute), Value: 8.0})
 	res := ts.Slice(start, end)
 	if res.Length() != 4 {
 		t.Errorf("Expected sliced TimeSeries length 4, got %d", res.Length())
 	}
 
-	if res.datapoints[0].timestamp != start {
-		t.Errorf("Expected first datapoint timestamp %v, got %v", start, res.datapoints[0].timestamp)
+	if res.DataPoints()[0].Timestamp != start {
+		t.Errorf("Expected first datapoint timestamp %v, got %v", start, res.DataPoints()[0].Timestamp)
 	}
 
-	if res.datapoints[3].timestamp != now.Add(5*time.Minute) {
-		t.Errorf("Expected last datapoint timestamp %v, got %v", now.Add(5*time.Minute), res.datapoints[3].timestamp)
+	if res.DataPoints()[3].Timestamp != now.Add(5*time.Minute) {
+		t.Errorf("Expected last datapoint timestamp %v, got %v", now.Add(5*time.Minute), res.DataPoints()[3].Timestamp)
 	}
 }
 
@@ -203,10 +203,10 @@ func TestResolution(t *testing.T) {
 	ts := Empty()
 	base := time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC)
 
-	ts.AddPoint(DataPoint{timestamp: base, value: 1})
-	ts.AddPoint(DataPoint{timestamp: base.Add(time.Minute), value: 2})
-	ts.AddPoint(DataPoint{timestamp: base.Add(2 * time.Minute), value: 3})
-	ts.AddPoint(DataPoint{timestamp: base.Add(4 * time.Minute), value: 4})
+	ts.AddPoint(DataPoint{Timestamp: base, Value: 1})
+	ts.AddPoint(DataPoint{Timestamp: base.Add(time.Minute), Value: 2})
+	ts.AddPoint(DataPoint{Timestamp: base.Add(2 * time.Minute), Value: 3})
+	ts.AddPoint(DataPoint{Timestamp: base.Add(4 * time.Minute), Value: 4})
 
 	res, err := ts.Resolution()
 	if err != nil {
@@ -217,7 +217,6 @@ func TestResolution(t *testing.T) {
 		t.Errorf("Expected resolution 1m, got %v", res)
 	}
 }
-
 
 func TestMap(t *testing.T) {
 	ts := Empty()
@@ -263,7 +262,7 @@ func TestFilter_ByIndex(t *testing.T) {
 	ts.AddPoint(DataPoint{now.Add(10 * time.Minute), 20.0})
 
 	mapped := ts.Filter(func(dp DataPoint) bool {
-		return dp.timestamp.Equal(now.Add(5 * time.Minute))
+		return dp.Timestamp.Equal(now.Add(5 * time.Minute))
 	})
 	expectedValues := []float64{5.0}
 	if mapped.Length() != len(expectedValues) {
@@ -274,7 +273,6 @@ func TestFilter_ByIndex(t *testing.T) {
 func TestJoin(t *testing.T) {
 	ts1 := Empty()
 	ts2 := Empty()
-	expected := AlignedSeries{}
 
 	ts1.AddPoint(DataPoint{time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC), 10.0})
 	ts1.AddPoint(DataPoint{time.Date(2024, 6, 1, 11, 0, 0, 0, time.UTC), 20.0})
@@ -282,18 +280,18 @@ func TestJoin(t *testing.T) {
 	ts2.AddPoint(DataPoint{time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC), 15.0})
 	ts2.AddPoint(DataPoint{time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC), 25.0})
 
-	expected.datapoints = []DoubleDataPoint{
-		{time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC), 10.0, 15.0},
+	expectedPoints := []DoubleDataPoint{
+		{Timestamp: time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC), LeftValue: 10.0, RightValue: 15.0},
 	}
 
 	joined := ts1.Join(ts2)
 
-	if joined.Length() != len(expected.datapoints) {
-		t.Errorf("Expected joined AlignedSeries length %d, got %d", len(expected.datapoints), joined.Length())
+	if joined.Length() != len(expectedPoints) {
+		t.Errorf("Expected joined AlignedSeries length %d, got %d", len(expectedPoints), joined.Length())
 	}
-	for i, dp := range joined.datapoints {
-		expDp := expected.datapoints[i]
-		if !dp.timestamp.Equal(expDp.timestamp) || dp.leftValue != expDp.leftValue || dp.rightValue != expDp.rightValue {
+	for i, dp := range joined.DataPoints() {
+		expDp := expectedPoints[i]
+		if !dp.Timestamp.Equal(expDp.Timestamp) || dp.LeftValue != expDp.LeftValue || dp.RightValue != expDp.RightValue {
 			t.Errorf("At index %d, expected datapoint %+v, got %+v", i, expDp, dp)
 		}
 	}
@@ -302,7 +300,6 @@ func TestJoin(t *testing.T) {
 func TestJoinLeft(t *testing.T) {
 	ts1 := Empty()
 	ts2 := Empty()
-	expected := AlignedSeries{}
 
 	ts1.AddPoint(DataPoint{time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC), 10.0})
 	ts1.AddPoint(DataPoint{time.Date(2024, 6, 1, 11, 0, 0, 0, time.UTC), 20.0})
@@ -310,19 +307,19 @@ func TestJoinLeft(t *testing.T) {
 	ts2.AddPoint(DataPoint{time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC), 15.0})
 	ts2.AddPoint(DataPoint{time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC), 25.0})
 
-	expected.datapoints = []DoubleDataPoint{
-		{time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC), 10.0, 15.0},
-		{time.Date(2024, 6, 1, 11, 0, 0, 0, time.UTC), 20.0, 0.0},
+	expectedPoints := []DoubleDataPoint{
+		{Timestamp: time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC), LeftValue: 10.0, RightValue: 15.0},
+		{Timestamp: time.Date(2024, 6, 1, 11, 0, 0, 0, time.UTC), LeftValue: 20.0, RightValue: 0.0},
 	}
 
 	joined := ts1.JoinLeft(ts2, 0.0)
 
-	if joined.Length() != len(expected.datapoints) {
-		t.Errorf("Expected joined AlignedSeries length %d, got %d", len(expected.datapoints), joined.Length())
+	if joined.Length() != len(expectedPoints) {
+		t.Errorf("Expected joined AlignedSeries length %d, got %d", len(expectedPoints), joined.Length())
 	}
-	for i, dp := range joined.datapoints {
-		expDp := expected.datapoints[i]
-		if !dp.timestamp.Equal(expDp.timestamp) || dp.leftValue != expDp.leftValue || dp.rightValue != expDp.rightValue {
+	for i, dp := range joined.DataPoints() {
+		expDp := expectedPoints[i]
+		if !dp.Timestamp.Equal(expDp.Timestamp) || dp.LeftValue != expDp.LeftValue || dp.RightValue != expDp.RightValue {
 			t.Errorf("At index %d, expected datapoint %+v, got %+v", i, expDp, dp)
 		}
 	}
@@ -331,7 +328,6 @@ func TestJoinLeft(t *testing.T) {
 func TestJoinOuter(t *testing.T) {
 	ts1 := Empty()
 	ts2 := Empty()
-	expected := AlignedSeries{}
 
 	ts1.AddPoint(DataPoint{time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC), 10.0})
 	ts1.AddPoint(DataPoint{time.Date(2024, 6, 1, 11, 0, 0, 0, time.UTC), 20.0})
@@ -339,20 +335,20 @@ func TestJoinOuter(t *testing.T) {
 	ts2.AddPoint(DataPoint{time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC), 15.0})
 	ts2.AddPoint(DataPoint{time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC), 25.0})
 
-	expected.datapoints = []DoubleDataPoint{
-		{time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC), 10.0, 15.0},
-		{time.Date(2024, 6, 1, 11, 0, 0, 0, time.UTC), 20.0, 0.0},
-		{time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC), 0.0, 25.0},
+	expectedPoints := []DoubleDataPoint{
+		{Timestamp: time.Date(2024, 6, 1, 10, 0, 0, 0, time.UTC), LeftValue: 10.0, RightValue: 15.0},
+		{Timestamp: time.Date(2024, 6, 1, 11, 0, 0, 0, time.UTC), LeftValue: 20.0, RightValue: 0.0},
+		{Timestamp: time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC), LeftValue: 0.0, RightValue: 25.0},
 	}
 
 	joined := ts1.JoinOuter(ts2, 0.0, 0.0)
 
-	if joined.Length() != len(expected.datapoints) {
-		t.Errorf("Expected joined AlignedSeries length %d, got %d", len(expected.datapoints), joined.Length())
+	if joined.Length() != len(expectedPoints) {
+		t.Errorf("Expected joined AlignedSeries length %d, got %d", len(expectedPoints), joined.Length())
 	}
-	for i, dp := range joined.datapoints {
-		expDp := expected.datapoints[i]
-		if !dp.timestamp.Equal(expDp.timestamp) || dp.leftValue != expDp.leftValue || dp.rightValue != expDp.rightValue {
+	for i, dp := range joined.DataPoints() {
+		expDp := expectedPoints[i]
+		if !dp.Timestamp.Equal(expDp.Timestamp) || dp.LeftValue != expDp.LeftValue || dp.RightValue != expDp.RightValue {
 			t.Errorf("At index %d, expected datapoint %+v, got %+v", i, expDp, dp)
 		}
 	}
@@ -362,11 +358,11 @@ func TestMedian(t *testing.T) {
 	ts := Empty()
 	now := time.Now()
 
-	ts.AddPoint(DataPoint{timestamp: now, value: 1.0})
-	ts.AddPoint(DataPoint{timestamp: now.Add(time.Minute), value: 2})
-	ts.AddPoint(DataPoint{timestamp: now.Add(2 * time.Minute), value: 3.0})
-	ts.AddPoint(DataPoint{timestamp: now.Add(3 * time.Minute), value: 4.0})
-	ts.AddPoint(DataPoint{timestamp: now.Add(4 * time.Minute), value: 5.0})
+	ts.AddPoint(DataPoint{Timestamp: now, Value: 1.0})
+	ts.AddPoint(DataPoint{Timestamp: now.Add(time.Minute), Value: 2})
+	ts.AddPoint(DataPoint{Timestamp: now.Add(2 * time.Minute), Value: 3.0})
+	ts.AddPoint(DataPoint{Timestamp: now.Add(3 * time.Minute), Value: 4.0})
+	ts.AddPoint(DataPoint{Timestamp: now.Add(4 * time.Minute), Value: 5.0})
 
 	m, err := ts.Median()
 
@@ -378,7 +374,7 @@ func TestMedian(t *testing.T) {
 		t.Errorf("Expected median value was %f, got ", m)
 	}
 
-	ts.AddPoint(DataPoint{timestamp: now.Add(5 * time.Minute), value: 6.0})
+	ts.AddPoint(DataPoint{Timestamp: now.Add(5 * time.Minute), Value: 6.0})
 
 	m2, err2 := ts.Median()
 
@@ -396,17 +392,17 @@ func TestRollingWindow(t *testing.T) {
 	expected := Empty()
 	now := time.Now()
 
-	ts.AddPoint(DataPoint{timestamp: now, value: 1.0})
-	ts.AddPoint(DataPoint{timestamp: now.Add(10 * time.Minute), value: 2})
-	ts.AddPoint(DataPoint{timestamp: now.Add(30 * time.Minute), value: 3.0})
-	ts.AddPoint(DataPoint{timestamp: now.Add(50 * time.Minute), value: 4.0})
-	ts.AddPoint(DataPoint{timestamp: now.Add(80 * time.Minute), value: 5.0})
+	ts.AddPoint(DataPoint{Timestamp: now, Value: 1.0})
+	ts.AddPoint(DataPoint{Timestamp: now.Add(10 * time.Minute), Value: 2})
+	ts.AddPoint(DataPoint{Timestamp: now.Add(30 * time.Minute), Value: 3.0})
+	ts.AddPoint(DataPoint{Timestamp: now.Add(50 * time.Minute), Value: 4.0})
+	ts.AddPoint(DataPoint{Timestamp: now.Add(80 * time.Minute), Value: 5.0})
 
-	expected.AddPoint(DataPoint{timestamp: now, value: 1.0})
-	expected.AddPoint(DataPoint{timestamp: now.Add(10 * time.Minute), value: 3.0})
-	expected.AddPoint(DataPoint{timestamp: now.Add(30 * time.Minute), value: 6.0})
-	expected.AddPoint(DataPoint{timestamp: now.Add(50 * time.Minute), value: 10.0})
-	expected.AddPoint(DataPoint{timestamp: now.Add(80 * time.Minute), value: 12.0})
+	expected.AddPoint(DataPoint{Timestamp: now, Value: 1.0})
+	expected.AddPoint(DataPoint{Timestamp: now.Add(10 * time.Minute), Value: 3.0})
+	expected.AddPoint(DataPoint{Timestamp: now.Add(30 * time.Minute), Value: 6.0})
+	expected.AddPoint(DataPoint{Timestamp: now.Add(50 * time.Minute), Value: 10.0})
+	expected.AddPoint(DataPoint{Timestamp: now.Add(80 * time.Minute), Value: 12.0})
 
 	rwts := ts.RollingWindow(time.Hour, func(vs []float64) float64 {
 		res := 0.0
@@ -416,12 +412,12 @@ func TestRollingWindow(t *testing.T) {
 		return res
 	})
 
-	if rwts.Length() != len(expected.datapoints) {
-		t.Errorf("Expected length %d, got %d", len(expected.datapoints), rwts.Length())
+	if rwts.Length() != len(expected.DataPoints()) {
+		t.Errorf("Expected length %d, got %d", len(expected.DataPoints()), rwts.Length())
 	}
-	for i, dp := range rwts.datapoints {
-		expDp := expected.datapoints[i]
-		if !dp.timestamp.Equal(expDp.timestamp) || dp.value != expDp.value {
+	for i, dp := range rwts.DataPoints() {
+		expDp := expected.DataPoints()[i]
+		if !dp.Timestamp.Equal(expDp.Timestamp) || dp.Value != expDp.Value {
 			t.Errorf("At index %d, expected datapoint %+v, got %+v", i, expDp, dp)
 		}
 	}

@@ -1,10 +1,12 @@
-package timeseriesgo
+package tsio
 
 import (
 	"encoding/csv"
 	"strings"
 	"testing"
 	"time"
+
+	timeseriesgo "github.com/wenta/timeseries-go"
 )
 
 func TestFromStringParsesRows(t *testing.T) {
@@ -26,20 +28,20 @@ func TestFromStringParsesRows(t *testing.T) {
 	}
 	expectedValues := []float64{1.5, 2.5}
 
-	for i, dp := range ts.datapoints {
-		if !dp.timestamp.Equal(expectedTimes[i]) {
-			t.Errorf("row %d timestamp mismatch: expected %v, got %v", i, expectedTimes[i], dp.timestamp)
+	for i, dp := range ts.DataPoints() {
+		if !dp.Timestamp.Equal(expectedTimes[i]) {
+			t.Errorf("row %d timestamp mismatch: expected %v, got %v", i, expectedTimes[i], dp.Timestamp)
 		}
-		if dp.value != expectedValues[i] {
-			t.Errorf("row %d value mismatch: expected %v, got %v", i, expectedValues[i], dp.value)
+		if dp.Value != expectedValues[i] {
+			t.Errorf("row %d value mismatch: expected %v, got %v", i, expectedValues[i], dp.Value)
 		}
 	}
 }
 
 func TestToStringProducesCSV(t *testing.T) {
-	ts := Empty()
-	ts.AddPoint(DataPoint{timestamp: time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC), value: 1.5})
-	ts.AddPoint(DataPoint{timestamp: time.Date(2024, 6, 1, 0, 1, 0, 0, time.UTC), value: 2.5})
+	ts := timeseriesgo.Empty()
+	ts.AddPoint(timeseriesgo.DataPoint{Timestamp: time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC), Value: 1.5})
+	ts.AddPoint(timeseriesgo.DataPoint{Timestamp: time.Date(2024, 6, 1, 0, 1, 0, 0, time.UTC), Value: 2.5})
 
 	out, err := ToString(ts)
 	if err != nil {

@@ -1,8 +1,10 @@
-package timeseriesgo
+package generator
 
 import (
 	"testing"
 	"time"
+
+	timeseriesgo "github.com/wenta/timeseries-go"
 )
 
 func TestGenerateConstant(t *testing.T) {
@@ -23,8 +25,8 @@ func TestGenerateConstant(t *testing.T) {
 			t.Errorf("At index %d: expected value %f, got %f", i, value, v)
 		}
 		expectedTime := start.Add(time.Duration(i) * interval)
-		if !ts.datapoints[i].timestamp.Equal(expectedTime) {
-			t.Errorf("At index %d: expected timestamp %v, got %v", i, expectedTime, ts.datapoints[i].timestamp)
+		if !ts.DataPoints()[i].Timestamp.Equal(expectedTime) {
+			t.Errorf("At index %d: expected timestamp %v, got %v", i, expectedTime, ts.DataPoints()[i].Timestamp)
 		}
 	}
 }
@@ -53,9 +55,9 @@ func TestGenerateRandomWalk(t *testing.T) {
 
 func TestRepeat(t *testing.T) {
 	base := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
-	pattern := Empty()
-	pattern.AddPoint(DataPoint{timestamp: base, value: 1})
-	pattern.AddPoint(DataPoint{timestamp: base.Add(time.Minute), value: 2})
+	pattern := timeseriesgo.Empty()
+	pattern.AddPoint(timeseriesgo.DataPoint{Timestamp: base, Value: 1})
+	pattern.AddPoint(timeseriesgo.DataPoint{Timestamp: base.Add(time.Minute), Value: 2})
 
 	start := base
 	end := base.Add(5 * time.Minute)
@@ -67,28 +69,29 @@ func TestRepeat(t *testing.T) {
 	}
 
 	expectedValues := []float64{1, 2, 1, 2, 1}
-	for i, dp := range repeated.datapoints {
+	for i, dp := range repeated.DataPoints() {
 		expectedTs := start.Add(time.Duration(i) * time.Minute)
-		if !dp.timestamp.Equal(expectedTs) {
-			t.Errorf("At idx %d expected timestamp %v, got %v", i, expectedTs, dp.timestamp)
+		if !dp.Timestamp.Equal(expectedTs) {
+			t.Errorf("At idx %d expected timestamp %v, got %v", i, expectedTs, dp.Timestamp)
 		}
-		if dp.value != expectedValues[i] {
-			t.Errorf("At idx %d expected value %.0f, got %.0f", i, expectedValues[i], dp.value)
+		if dp.Value != expectedValues[i] {
+			t.Errorf("At idx %d expected value %.0f, got %.0f", i, expectedValues[i], dp.Value)
 		}
 	}
 }
 
 func TestRepeatSinglePointPattern(t *testing.T) {
 	base := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
-	pattern := Empty()
-	pattern.AddPoint(DataPoint{timestamp: base, value: 5})
+	pattern := timeseriesgo.Empty()
+	pattern.AddPoint(timeseriesgo.DataPoint{Timestamp: base, Value: 5})
 
 	repeated := Repeat(pattern, base, base.Add(10*time.Minute))
 
 	if repeated.Length() != 1 {
 		t.Fatalf("Expected pattern returned unchanged with length 1, got %d", repeated.Length())
 	}
-	if repeated.datapoints[0].timestamp != base || repeated.datapoints[0].value != 5 {
-		t.Errorf("Expected original datapoint preserved, got %+v", repeated.datapoints[0])
+	points := repeated.DataPoints()
+	if points[0].Timestamp != base || points[0].Value != 5 {
+		t.Errorf("Expected original datapoint preserved, got %+v", points[0])
 	}
 }

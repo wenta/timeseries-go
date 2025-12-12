@@ -1,16 +1,18 @@
-package timeseriesgo
+package anomaly
 
 import (
 	"testing"
 	"time"
+
+	timeseriesgo "github.com/wenta/timeseries-go"
 )
 
 func TestZScore(t *testing.T) {
-	ts := Empty()
+	ts := timeseriesgo.Empty()
 	now := time.Now()
 	values := []float64{10, 11, 10, 12, 11, 50}
 	for i, v := range values {
-		ts.AddPoint(DataPoint{timestamp: now.Add(time.Duration(i) * time.Hour), value: v})
+		ts.AddPoint(timeseriesgo.DataPoint{Timestamp: now.Add(time.Duration(i) * time.Hour), Value: v})
 	}
 	zscored, err := ZScore(ts)
 	if err != nil {
@@ -22,9 +24,9 @@ func TestZScore(t *testing.T) {
 		t.Errorf("Expected Z-Scored series length %d, got %d", ts.Length(), zscored.Length())
 	}
 
-	for i, dp := range zscored.datapoints {
-		if dp.value-expectedValues[i] > 0.0001 || expectedValues[i]-dp.value > 0.0001 {
-			t.Errorf("At index %d: expected Z-Score value %f, got %f", i, expectedValues[i], dp.value)
+	for i, dp := range zscored.DataPoints() {
+		if dp.Value-expectedValues[i] > 0.0001 || expectedValues[i]-dp.Value > 0.0001 {
+			t.Errorf("At index %d: expected Z-Score value %f, got %f", i, expectedValues[i], dp.Value)
 		}
 	}
 
@@ -34,19 +36,19 @@ func TestZScore(t *testing.T) {
 	}
 	expectedAnomalies := []float64{0, 0, 0, 0, 0, 1}
 
-	for i, dp := range anomaly.datapoints {
-		if dp.value != expectedAnomalies[i] {
-			t.Errorf("At index %d: expected Anomaly value %f, got %f", i, expectedAnomalies[i], dp.value)
+	for i, dp := range anomaly.DataPoints() {
+		if dp.Value != expectedAnomalies[i] {
+			t.Errorf("At index %d: expected Anomaly value %f, got %f", i, expectedAnomalies[i], dp.Value)
 		}
 	}
 }
 
 func TestRobustZScore(t *testing.T) {
-	ts := Empty()
+	ts := timeseriesgo.Empty()
 	now := time.Now()
 	values := []float64{10, 11, 10, 12, 11, 50}
 	for i, v := range values {
-		ts.AddPoint(DataPoint{timestamp: now.Add(time.Duration(i) * time.Hour), value: v})
+		ts.AddPoint(timeseriesgo.DataPoint{Timestamp: now.Add(time.Duration(i) * time.Hour), Value: v})
 	}
 	zscored, err := RobustZScore(ts)
 	if err != nil {
@@ -58,9 +60,9 @@ func TestRobustZScore(t *testing.T) {
 		t.Errorf("Expected Robust Z-Scored series length %d, got %d", ts.Length(), zscored.Length())
 	}
 
-	for i, dp := range zscored.datapoints {
-		if dp.value-expectedValues[i] > 0.0001 || expectedValues[i]-dp.value > 0.0001 {
-			t.Errorf("At index %d: expected Robust Z-Score value %f, got %f", i, expectedValues[i], dp.value)
+	for i, dp := range zscored.DataPoints() {
+		if dp.Value-expectedValues[i] > 0.0001 || expectedValues[i]-dp.Value > 0.0001 {
+			t.Errorf("At index %d: expected Robust Z-Score value %f, got %f", i, expectedValues[i], dp.Value)
 		}
 	}
 
@@ -70,19 +72,19 @@ func TestRobustZScore(t *testing.T) {
 	}
 	expectedAnomalies := []float64{0, 0, 0, 0, 0, 1}
 
-	for i, dp := range anomaly.datapoints {
-		if dp.value != expectedAnomalies[i] {
-			t.Errorf("At index %d: expected Anomaly value %f, got %f", i, expectedAnomalies[i], dp.value)
+	for i, dp := range anomaly.DataPoints() {
+		if dp.Value != expectedAnomalies[i] {
+			t.Errorf("At index %d: expected Anomaly value %f, got %f", i, expectedAnomalies[i], dp.Value)
 		}
 	}
 }
 
 func TestFindSpikeAnomalies(t *testing.T) {
-	ts := Empty()
+	ts := timeseriesgo.Empty()
 	now := time.Now()
 	values := []float64{10, 11, 30, 29, 29, 29, 20, 21}
 	for i, v := range values {
-		ts.AddPoint(DataPoint{timestamp: now.Add(time.Duration(i) * time.Minute), value: v})
+		ts.AddPoint(timeseriesgo.DataPoint{Timestamp: now.Add(time.Duration(i) * time.Minute), Value: v})
 	}
 
 	anomalies, err := FindSpikeAnomalies(ts, 10)
@@ -91,19 +93,19 @@ func TestFindSpikeAnomalies(t *testing.T) {
 	}
 
 	expected := []float64{0, 0, 1, 0, 0, 0, 0, 0}
-	for i, dp := range anomalies.datapoints {
-		if dp.value != expected[i] {
-			t.Errorf("At index %d: expected Anomaly value %f, got %f", i, expected[i], dp.value)
+	for i, dp := range anomalies.DataPoints() {
+		if dp.Value != expected[i] {
+			t.Errorf("At index %d: expected Anomaly value %f, got %f", i, expected[i], dp.Value)
 		}
 	}
 }
 
 func TestFindDropAnomalies(t *testing.T) {
-	ts := Empty()
+	ts := timeseriesgo.Empty()
 	now := time.Now()
 	values := []float64{10, 11, 30, 29, 29, 29, 20, 21}
 	for i, v := range values {
-		ts.AddPoint(DataPoint{timestamp: now.Add(time.Duration(i) * time.Minute), value: v})
+		ts.AddPoint(timeseriesgo.DataPoint{Timestamp: now.Add(time.Duration(i) * time.Minute), Value: v})
 	}
 
 	anomalies, err := FindDropAnomalies(ts, 8)
@@ -112,19 +114,19 @@ func TestFindDropAnomalies(t *testing.T) {
 	}
 
 	expected := []float64{0, 0, 0, 0, 0, 0, 1, 0}
-	for i, dp := range anomalies.datapoints {
-		if dp.value != expected[i] {
-			t.Errorf("At index %d: expected Anomaly value %f, got %f", i, expected[i], dp.value)
+	for i, dp := range anomalies.DataPoints() {
+		if dp.Value != expected[i] {
+			t.Errorf("At index %d: expected Anomaly value %f, got %f", i, expected[i], dp.Value)
 		}
 	}
 }
 
 func TestFindFlatlineAnomalies(t *testing.T) {
-	ts := Empty()
+	ts := timeseriesgo.Empty()
 	now := time.Now()
 	values := []float64{10, 11, 30, 29, 29, 29, 20, 21}
 	for i, v := range values {
-		ts.AddPoint(DataPoint{timestamp: now.Add(time.Duration(i) * time.Minute), value: v})
+		ts.AddPoint(timeseriesgo.DataPoint{Timestamp: now.Add(time.Duration(i) * time.Minute), Value: v})
 	}
 
 	anomalies, err := FindFlatlineAnomalies(ts, 0.01, 3)
@@ -133,9 +135,9 @@ func TestFindFlatlineAnomalies(t *testing.T) {
 	}
 
 	expected := []float64{0, 0, 0, 1, 1, 1, 0, 0}
-	for i, dp := range anomalies.datapoints {
-		if dp.value != expected[i] {
-			t.Errorf("At index %d: expected Anomaly value %f, got %f", i, expected[i], dp.value)
+	for i, dp := range anomalies.DataPoints() {
+		if dp.Value != expected[i] {
+			t.Errorf("At index %d: expected Anomaly value %f, got %f", i, expected[i], dp.Value)
 		}
 	}
 }

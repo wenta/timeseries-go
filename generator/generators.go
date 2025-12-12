@@ -1,8 +1,10 @@
-package timeseriesgo
+package generator
 
 import (
 	"math/rand/v2"
 	"time"
+
+	timeseriesgo "github.com/wenta/timeseries-go"
 )
 
 /**
@@ -30,12 +32,12 @@ func MakeSeriesIndex(start time.Time, interval time.Duration, count int) []time.
  *
  * @return A TimeSeries with DataPoints at the specified timestamps, all having the same value.
  */
-func Constant(index []time.Time, value float64) TimeSeries {
-	ts := Empty()
+func Constant(index []time.Time, value float64) timeseriesgo.TimeSeries {
+	ts := timeseriesgo.Empty()
 	for _, dt := range index {
-		ts.AddPoint(DataPoint{
-			timestamp: dt,
-			value:     value,
+		ts.AddPoint(timeseriesgo.DataPoint{
+			Timestamp: dt,
+			Value:     value,
 		})
 	}
 	return ts
@@ -50,13 +52,13 @@ func Constant(index []time.Time, value float64) TimeSeries {
  * @return A TimeSeries with DataPoints at the specified timestamps, where each value is derived from the previous one by adding or subtracting 1.0 randomly.
  */
 
-func RandomWalk(index []time.Time, startValue float64) TimeSeries {
-	ts := Empty()
+func RandomWalk(index []time.Time, startValue float64) timeseriesgo.TimeSeries {
+	ts := timeseriesgo.Empty()
 	nextValue := startValue
 	for _, dt := range index {
-		ts.AddPoint(DataPoint{
-			timestamp: dt,
-			value:     nextValue,
+		ts.AddPoint(timeseriesgo.DataPoint{
+			Timestamp: dt,
+			Value:     nextValue,
 		})
 		if rand.IntN(2) == 0 {
 			nextValue -= 1.0
@@ -67,11 +69,11 @@ func RandomWalk(index []time.Time, startValue float64) TimeSeries {
 	return ts
 }
 
-func Repeat(pattern TimeSeries, start time.Time, end time.Time) TimeSeries {
+func Repeat(pattern timeseriesgo.TimeSeries, start time.Time, end time.Time) timeseriesgo.TimeSeries {
 	if pattern.IsEmpty() {
-		return Empty()
+		return timeseriesgo.Empty()
 	} else {
-		ts := Empty()
+		ts := timeseriesgo.Empty()
 		resolution, err := pattern.Resolution()
 		if err != nil {
 			return pattern
@@ -82,7 +84,7 @@ func Repeat(pattern TimeSeries, start time.Time, end time.Time) TimeSeries {
 			if i == pattern.Length() {
 				i = 0
 			}
-			ts.AddPoint(DataPoint{now, vs[i]})
+			ts.AddPoint(timeseriesgo.DataPoint{Timestamp: now, Value: vs[i]})
 			i++
 		}
 		return ts

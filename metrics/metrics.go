@@ -1,9 +1,11 @@
-package timeseriesgo
+package metrics
 
 import (
 	"errors"
 	"math"
 	"slices"
+
+	timeseriesgo "github.com/wenta/timeseries-go"
 )
 
 /**
@@ -14,11 +16,14 @@ import (
  *
  * @return The MSE value, or an error if either TimeSeries is empty.
  */
-func MSE(ts1, ts2 TimeSeries) (float64, error) {
+func MSE(ts1, ts2 timeseriesgo.TimeSeries) (float64, error) {
 	if ts1.IsEmpty() || ts2.IsEmpty() {
 		return 0.0, errors.New("one or both TimeSeries are empty")
 	} else {
 		joined := ts1.Join(ts2)
+		if joined.Length() == 0 {
+			return 0.0, errors.New("no overlapping timestamps between series")
+		}
 		ts := joined.MapValuesWithReduce(func(l, r float64) float64 {
 			diff := l - r
 			return diff * diff
@@ -35,7 +40,7 @@ func MSE(ts1, ts2 TimeSeries) (float64, error) {
  *
  * @return The RMSE value, or an error if either TimeSeries is empty.
  */
-func RMSE(ts1, ts2 TimeSeries) (float64, error) {
+func RMSE(ts1, ts2 timeseriesgo.TimeSeries) (float64, error) {
 	mse, err := MSE(ts1, ts2)
 	if err != nil {
 		return 0.0, err
@@ -52,11 +57,14 @@ func RMSE(ts1, ts2 TimeSeries) (float64, error) {
  *
  * @return The MAE value, or an error if either TimeSeries is empty.
  */
-func MAE(ts1, ts2 TimeSeries) (float64, error) {
+func MAE(ts1, ts2 timeseriesgo.TimeSeries) (float64, error) {
 	if ts1.IsEmpty() || ts2.IsEmpty() {
 		return 0.0, errors.New("one or both TimeSeries are empty")
 	} else {
 		joined := ts1.Join(ts2)
+		if joined.Length() == 0 {
+			return 0.0, errors.New("no overlapping timestamps between series")
+		}
 		ts := joined.MapValuesWithReduce(func(l, r float64) float64 {
 			return math.Abs(l - r)
 		})
@@ -75,7 +83,7 @@ func MAE(ts1, ts2 TimeSeries) (float64, error) {
 	}
 }
 
-func MAD(ts TimeSeries) (float64, error) {
+func MAD(ts timeseriesgo.TimeSeries) (float64, error) {
 	if ts.IsEmpty() {
 		return 0.0, errors.New("timeseries is empty")
 	} else {

@@ -8,8 +8,8 @@ import (
 )
 
 type DataPoint struct {
-	timestamp time.Time
-	value     float64
+	Timestamp time.Time
+	Value     float64
 }
 
 type TimeSeries struct {
@@ -18,6 +18,13 @@ type TimeSeries struct {
 
 func Empty() TimeSeries {
 	return TimeSeries{datapoints: []DataPoint{}}
+}
+
+// FromDataPoints builds a TimeSeries from a slice of datapoints (copied).
+func FromDataPoints(points []DataPoint) TimeSeries {
+	cp := make([]DataPoint, len(points))
+	copy(cp, points)
+	return TimeSeries{datapoints: cp}
 }
 
 func (ts *TimeSeries) IsEmpty() bool {
@@ -34,7 +41,7 @@ func (ts *TimeSeries) Length() int {
 func (ts *TimeSeries) Values() []float64 {
 	var res []float64
 	for _, dp := range ts.datapoints {
-		res = append(res, dp.value)
+		res = append(res, dp.Value)
 	}
 	return res
 }
@@ -45,9 +52,16 @@ func (ts *TimeSeries) Values() []float64 {
 func (ts *TimeSeries) Timestamps() []time.Time {
 	var res []time.Time
 	for _, dp := range ts.datapoints {
-		res = append(res, dp.timestamp)
+		res = append(res, dp.Timestamp)
 	}
 	return res
+}
+
+// DataPoints returns a shallow copy of underlying datapoints to allow safe read access.
+func (ts *TimeSeries) DataPoints() []DataPoint {
+	cp := make([]DataPoint, len(ts.datapoints))
+	copy(cp, ts.datapoints)
+	return cp
 }
 
 /**
@@ -97,7 +111,7 @@ func (ts *TimeSeries) Resolution() (time.Duration, error) {
 	counts := make(map[time.Duration]int)
 
 	for i := 1; i < len(ts.datapoints); i++ {
-		d := ts.datapoints[i].timestamp.Sub(ts.datapoints[i-1].timestamp)
+		d := ts.datapoints[i].Timestamp.Sub(ts.datapoints[i-1].Timestamp)
 		counts[d]++
 	}
 
@@ -126,7 +140,7 @@ func (ts *TimeSeries) AddPoint(dp DataPoint) {
 func (ts *TimeSeries) Print() {
 	fmt.Println("Timestamp, Value")
 	for _, dp := range ts.datapoints {
-		fmt.Printf("%s, %.2f\n", dp.timestamp.Format(time.RFC3339), dp.value)
+		fmt.Printf("%s, %.2f\n", dp.Timestamp.Format(time.RFC3339), dp.Value)
 	}
 }
 
@@ -141,7 +155,7 @@ func (ts *TimeSeries) Print() {
 func (ts TimeSeries) Slice(start time.Time, end time.Time) TimeSeries {
 	sliced := Empty()
 	for _, dp := range ts.datapoints {
-		if (dp.timestamp.Equal(start) || dp.timestamp.After(start)) && dp.timestamp.Before(end) {
+		if (dp.Timestamp.Equal(start) || dp.Timestamp.After(start)) && dp.Timestamp.Before(end) {
 			sliced.AddPoint(dp)
 		}
 	}
@@ -156,8 +170,8 @@ func Zip(timestamps []time.Time, values []float64) (TimeSeries, error) {
 	points := make([]DataPoint, len(timestamps))
 	for i := range timestamps {
 		points[i] = DataPoint{
-			timestamp: timestamps[i],
-			value:     values[i],
+			Timestamp: timestamps[i],
+			Value:     values[i],
 		}
 	}
 	return TimeSeries{datapoints: points}, nil
@@ -170,8 +184,8 @@ func (ts *TimeSeries) UnZip() ([]time.Time, []float64) {
 	timestamps := make([]time.Time, len(ts.datapoints))
 	values := make([]float64, len(ts.datapoints))
 	for i, point := range ts.datapoints {
-		timestamps[i] = point.timestamp
-		values[i] = point.value
+		timestamps[i] = point.Timestamp
+		values[i] = point.Value
 	}
 	return timestamps, values
 }
@@ -187,8 +201,8 @@ func (ts *TimeSeries) MapValues(f func(float64) float64) TimeSeries {
 	mapped := Empty()
 	for _, dp := range ts.datapoints {
 		mapped.AddPoint(DataPoint{
-			timestamp: dp.timestamp,
-			value:     f(dp.value),
+			Timestamp: dp.Timestamp,
+			Value:     f(dp.Value),
 		})
 	}
 	return mapped
@@ -235,7 +249,7 @@ func (ts *TimeSeries) GroupByTime(g func(dt time.Time) time.Time, f func(dp []Da
 	} else {
 		var grouped [][]DataPoint
 		for _, dp := range ts.datapoints {
-			groupedKey := g(dp.timestamp)
+			groupedKey := g(dp.Timestamp)
 			idx, err := findIndexInGroup(grouped, groupedKey)
 			if err == nil {
 				grouped[idx] = append(grouped[idx], dp)
@@ -245,7 +259,7 @@ func (ts *TimeSeries) GroupByTime(g func(dt time.Time) time.Time, f func(dp []Da
 		}
 		var result []DataPoint
 		for _, group := range grouped {
-			result = append(result, DataPoint{timestamp: g(group[0].timestamp), value: f(group)})
+			result = append(result, DataPoint{Timestamp: g(group[0].Timestamp), Value: f(group)})
 
 		}
 		return TimeSeries{result}
@@ -255,10 +269,10 @@ func (ts *TimeSeries) GroupByTime(g func(dt time.Time) time.Time, f func(dp []Da
 func (ts TimeSeries) RollingWindow(window time.Duration, f func(vs []float64) float64) TimeSeries {
 	return ts.Map(func(dp DataPoint) DataPoint {
 		ws := ts.Filter(func(dp2 DataPoint) bool {
-			return (dp2.timestamp.Before(dp.timestamp) && dp2.timestamp.After(dp.timestamp.Add(-window))) || dp2.timestamp.Equal(dp.timestamp)
+			return (dp2.Timestamp.Before(dp.Timestamp) && dp2.Timestamp.After(dp.Timestamp.Add(-window))) || dp2.Timestamp.Equal(dp.Timestamp)
 		})
 		v := f(ws.Values())
-		return DataPoint{dp.timestamp, v}
+		return DataPoint{Timestamp: dp.Timestamp, Value: v}
 	})
 }
 
@@ -274,10 +288,10 @@ func (ts *TimeSeries) Merge(otherTS TimeSeries) TimeSeries {
 	merged := Empty()
 	tsi, otsi := 0, 0
 	for tsi < ts.Length() && otsi < otherTS.Length() {
-		if ts.datapoints[tsi].timestamp.Before(otherTS.datapoints[otsi].timestamp) {
+		if ts.datapoints[tsi].Timestamp.Before(otherTS.datapoints[otsi].Timestamp) {
 			merged.AddPoint(ts.datapoints[tsi])
 			tsi++
-		} else if ts.datapoints[tsi].timestamp.Equal(otherTS.datapoints[otsi].timestamp) {
+		} else if ts.datapoints[tsi].Timestamp.Equal(otherTS.datapoints[otsi].Timestamp) {
 			merged.AddPoint(ts.datapoints[tsi])
 			tsi++
 			otsi++
@@ -315,11 +329,11 @@ func (ts *TimeSeries) Join(otherTS TimeSeries) AlignedSeries {
 
 		for _, leftValue := range ts.datapoints {
 			for _, rightValue := range otherTS.datapoints {
-				if leftValue.timestamp.Equal(rightValue.timestamp) {
+				if leftValue.Timestamp.Equal(rightValue.Timestamp) {
 					res.datapoints = append(res.datapoints, DoubleDataPoint{
-						timestamp:  leftValue.timestamp,
-						leftValue:  leftValue.value,
-						rightValue: rightValue.value,
+						Timestamp:  leftValue.Timestamp,
+						LeftValue:  leftValue.Value,
+						RightValue: rightValue.Value,
 					})
 				}
 			}
@@ -345,11 +359,11 @@ func (ts *TimeSeries) JoinLeft(otherTS TimeSeries, defaultValue float64) Aligned
 		for _, leftValue := range ts.datapoints {
 			matched := false
 			for _, rightValue := range otherTS.datapoints {
-				if leftValue.timestamp.Equal(rightValue.timestamp) {
+				if leftValue.Timestamp.Equal(rightValue.Timestamp) {
 					res.datapoints = append(res.datapoints, DoubleDataPoint{
-						timestamp:  leftValue.timestamp,
-						leftValue:  leftValue.value,
-						rightValue: rightValue.value,
+						Timestamp:  leftValue.Timestamp,
+						LeftValue:  leftValue.Value,
+						RightValue: rightValue.Value,
 					})
 					matched = true
 					break
@@ -357,9 +371,9 @@ func (ts *TimeSeries) JoinLeft(otherTS TimeSeries, defaultValue float64) Aligned
 			}
 			if !matched {
 				res.datapoints = append(res.datapoints, DoubleDataPoint{
-					timestamp:  leftValue.timestamp,
-					leftValue:  leftValue.value,
-					rightValue: defaultValue,
+					Timestamp:  leftValue.Timestamp,
+					LeftValue:  leftValue.Value,
+					RightValue: defaultValue,
 				})
 			}
 		}
@@ -378,11 +392,11 @@ func (ts *TimeSeries) JoinOuter(otherTS TimeSeries, defaultLeftValue float64, de
 		for _, leftValue := range ts.datapoints {
 			matched := false
 			for _, rightValue := range otherTS.datapoints {
-				if leftValue.timestamp.Equal(rightValue.timestamp) {
+				if leftValue.Timestamp.Equal(rightValue.Timestamp) {
 					res.datapoints = append(res.datapoints, DoubleDataPoint{
-						timestamp:  leftValue.timestamp,
-						leftValue:  leftValue.value,
-						rightValue: rightValue.value,
+						Timestamp:  leftValue.Timestamp,
+						LeftValue:  leftValue.Value,
+						RightValue: rightValue.Value,
 					})
 					matched = true
 					break
@@ -390,25 +404,25 @@ func (ts *TimeSeries) JoinOuter(otherTS TimeSeries, defaultLeftValue float64, de
 			}
 			if !matched {
 				res.datapoints = append(res.datapoints, DoubleDataPoint{
-					timestamp:  leftValue.timestamp,
-					leftValue:  leftValue.value,
-					rightValue: defaultRightValue,
+					Timestamp:  leftValue.Timestamp,
+					LeftValue:  leftValue.Value,
+					RightValue: defaultRightValue,
 				})
 			}
 		}
 		for _, rightValue := range otherTS.datapoints {
 			matched := false
 			for _, leftValue := range ts.datapoints {
-				if rightValue.timestamp.Equal(leftValue.timestamp) {
+				if rightValue.Timestamp.Equal(leftValue.Timestamp) {
 					matched = true
 					break
 				}
 			}
 			if !matched {
 				res.datapoints = append(res.datapoints, DoubleDataPoint{
-					timestamp:  rightValue.timestamp,
-					leftValue:  defaultLeftValue,
-					rightValue: rightValue.value,
+					Timestamp:  rightValue.Timestamp,
+					LeftValue:  defaultLeftValue,
+					RightValue: rightValue.Value,
 				})
 			}
 		}
@@ -431,7 +445,7 @@ func (ts *TimeSeries) Min() (DataPoint, error) {
 	}
 	minDP := ts.datapoints[0]
 	for _, dp := range ts.datapoints {
-		if dp.value < minDP.value {
+		if dp.Value < minDP.Value {
 			minDP = dp
 		}
 	}
@@ -449,7 +463,7 @@ func (ts *TimeSeries) Sum() float64 {
 	}
 	sum := 0.0
 	for _, dp := range ts.datapoints {
-		sum += dp.value
+		sum += dp.Value
 	}
 	return sum
 }
@@ -465,7 +479,7 @@ func (ts *TimeSeries) Max() (DataPoint, error) {
 	}
 	maxDP := ts.datapoints[0]
 	for _, dp := range ts.datapoints {
-		if dp.value > maxDP.value {
+		if dp.Value > maxDP.Value {
 			maxDP = dp
 		}
 	}
@@ -502,7 +516,7 @@ func findIndexInGroup(grouped [][]DataPoint, key time.Time) (int, error) {
 		if len(k) == 0 {
 			return -1, errors.New("empty group encountered")
 		}
-		if k[0].timestamp.Equal(key) {
+		if k[0].Timestamp.Equal(key) {
 			return i, nil
 		}
 	}

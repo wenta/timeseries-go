@@ -6,9 +6,9 @@ import (
 )
 
 type DoubleDataPoint struct {
-	timestamp  time.Time
-	leftValue  float64
-	rightValue float64
+	Timestamp  time.Time
+	LeftValue  float64
+	RightValue float64
 }
 
 type AlignedSeries struct {
@@ -21,7 +21,7 @@ type AlignedSeries struct {
 func (ts *AlignedSeries) Print() {
 	fmt.Println("Timestamp, Left Value, Right Value")
 	for _, dp := range ts.datapoints {
-		fmt.Printf("%s, %.2f, %.2f\n", dp.timestamp.Format(time.RFC3339), dp.leftValue, dp.rightValue)
+		fmt.Printf("%s, %.2f, %.2f\n", dp.Timestamp.Format(time.RFC3339), dp.LeftValue, dp.RightValue)
 	}
 }
 
@@ -33,9 +33,16 @@ func (ts *AlignedSeries) MapValuesWithReduce(f func(float64, float64) float64) T
 	mapped := Empty()
 	for _, dp := range ts.datapoints {
 		mapped.AddPoint(DataPoint{
-			timestamp: dp.timestamp,
-			value:     f(dp.leftValue, dp.rightValue),
+			Timestamp: dp.Timestamp,
+			Value:     f(dp.LeftValue, dp.RightValue),
 		})
 	}
 	return mapped
+}
+
+// DataPoints returns a shallow copy of the underlying aligned datapoints for read-only use.
+func (ts *AlignedSeries) DataPoints() []DoubleDataPoint {
+	cp := make([]DoubleDataPoint, len(ts.datapoints))
+	copy(cp, ts.datapoints)
+	return cp
 }
