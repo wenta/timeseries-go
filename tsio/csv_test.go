@@ -11,9 +11,10 @@ import (
 
 func TestFromStringParsesRows(t *testing.T) {
 	input := "2024-06-01T00:00:00Z,1.5\n2024-06-01T00:01:00Z,2.5\n"
+	inputName := "wind speed"
 	reader := csv.NewReader(strings.NewReader(input))
 
-	ts, err := FromString(*reader)
+	ts, err := FromString(*reader, inputName)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -39,7 +40,7 @@ func TestFromStringParsesRows(t *testing.T) {
 }
 
 func TestToStringProducesCSV(t *testing.T) {
-	ts := timeseriesgo.Empty()
+	ts := timeseriesgo.EmptyLabeled("water level")
 	ts.AddPoint(timeseriesgo.DataPoint{Timestamp: time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC), Value: 1.5})
 	ts.AddPoint(timeseriesgo.DataPoint{Timestamp: time.Date(2024, 6, 1, 0, 1, 0, 0, time.UTC), Value: 2.5})
 

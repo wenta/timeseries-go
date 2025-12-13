@@ -14,10 +14,10 @@ import (
  * Parses a CSV reader into a TimeSeries.
  * Expected columns per row: timestamp, value (float64). No header support.
  */
-func FromStringWithTimeFormat(reader csv.Reader, timeFormat string) (timeseriesgo.TimeSeries, error) {
+func FromStringWithTimeFormat(reader csv.Reader, timeFormat string, label string) (timeseriesgo.TimeSeries, error) {
 	data, err := reader.ReadAll()
 	if err != nil {
-		return timeseriesgo.Empty(), err
+		return timeseriesgo.EmptyLabeled(label), err
 	}
 
 	ts := timeseriesgo.Empty()
@@ -49,9 +49,9 @@ func FromStringWithTimeFormat(reader csv.Reader, timeFormat string) (timeseriesg
  * Parses a CSV reader into a TimeSeries.
  * Expected columns per row: timestamp (RFC3339), value (float64). No header support.
  */
-func FromString(reader csv.Reader) (timeseriesgo.TimeSeries, error) {
+func FromString(reader csv.Reader, label string) (timeseriesgo.TimeSeries, error) {
 	timeFormat := time.RFC3339
-	return FromStringWithTimeFormat(reader, timeFormat)
+	return FromStringWithTimeFormat(reader, timeFormat, label)
 }
 
 func ToStringWithTimeFormat(ts timeseriesgo.TimeSeries, timeFormat string) (string, error) {

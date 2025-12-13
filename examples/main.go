@@ -46,7 +46,7 @@ func main() {
 	}
 	fmt.Println("\nCSV output:\n", csvStr)
 
-	reloaded, err := tsio.FromString(*csv.NewReader(strings.NewReader(csvStr)))
+	reloaded, err := tsio.FromString(*csv.NewReader(strings.NewReader(csvStr)), "example")
 	if err != nil {
 		log.Fatalf("parse failed: %v", err)
 	}

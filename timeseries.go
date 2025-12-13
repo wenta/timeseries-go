@@ -14,10 +14,15 @@ type DataPoint struct {
 
 type TimeSeries struct {
 	datapoints []DataPoint
+	label      string
 }
 
 func Empty() TimeSeries {
-	return TimeSeries{datapoints: []DataPoint{}}
+	return TimeSeries{datapoints: []DataPoint{}, label: "new series"}
+}
+
+func EmptyLabeled(label string) TimeSeries {
+	return TimeSeries{datapoints: []DataPoint{}, label: label}
 }
 
 // FromDataPoints builds a TimeSeries from a slice of datapoints (copied).
@@ -262,7 +267,7 @@ func (ts *TimeSeries) GroupByTime(g func(dt time.Time) time.Time, f func(dp []Da
 			result = append(result, DataPoint{Timestamp: g(group[0].Timestamp), Value: f(group)})
 
 		}
-		return TimeSeries{result}
+		return TimeSeries{result, ts.label + " grouped"}
 	}
 }
 
@@ -323,9 +328,9 @@ func (ts *TimeSeries) Merge(otherTS TimeSeries) TimeSeries {
  */
 func (ts *TimeSeries) Join(otherTS TimeSeries) AlignedSeries {
 	if ts.IsEmpty() || otherTS.IsEmpty() {
-		return AlignedSeries{}
+		return EmptyLabeledAlignedSeries("empty series")
 	} else {
-		res := AlignedSeries{}
+		res := EmptyLabeledAlignedSeries(ts.label + " joined with " + otherTS.label)
 
 		for _, leftValue := range ts.datapoints {
 			for _, rightValue := range otherTS.datapoints {
@@ -352,9 +357,9 @@ func (ts *TimeSeries) Join(otherTS TimeSeries) AlignedSeries {
  */
 func (ts *TimeSeries) JoinLeft(otherTS TimeSeries, defaultValue float64) AlignedSeries {
 	if ts.IsEmpty() {
-		return AlignedSeries{}
+		return EmptyLabeledAlignedSeries("empty series")
 	} else {
-		res := AlignedSeries{}
+		res := EmptyLabeledAlignedSeries(ts.label + " joined with " + otherTS.label)
 
 		for _, leftValue := range ts.datapoints {
 			matched := false
@@ -386,9 +391,9 @@ func (ts *TimeSeries) JoinLeft(otherTS TimeSeries, defaultValue float64) Aligned
  */
 func (ts *TimeSeries) JoinOuter(otherTS TimeSeries, defaultLeftValue float64, defaultRightValue float64) AlignedSeries {
 	if ts.IsEmpty() && otherTS.IsEmpty() {
-		return AlignedSeries{}
+		return EmptyLabeledAlignedSeries("empty series")
 	} else {
-		res := AlignedSeries{}
+		res := EmptyLabeledAlignedSeries(ts.label + " joined with " + otherTS.label)
 		for _, leftValue := range ts.datapoints {
 			matched := false
 			for _, rightValue := range otherTS.datapoints {

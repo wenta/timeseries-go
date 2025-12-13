@@ -13,6 +13,11 @@ type DoubleDataPoint struct {
 
 type AlignedSeries struct {
 	datapoints []DoubleDataPoint
+	label      string
+}
+
+func EmptyLabeledAlignedSeries(label string) AlignedSeries {
+	return AlignedSeries{datapoints: []DoubleDataPoint{}, label: label}
 }
 
 /**
