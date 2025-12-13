@@ -242,6 +242,132 @@ func (ts *TimeSeries) Filter(f func(DataPoint) bool) TimeSeries {
 }
 
 /**
+ * Resamples the TimeSeries on a fixed interval.
+ *
+ * @param delta The step between consecutive timestamps in the resampled series.
+ * @param f A function that takes the previous point, the next point, and the target timestamp, returning the interpolated value.
+ *
+ * @return A new TimeSeries on a regular grid from first to last timestamp (inclusive if last aligns to the grid).
+ *         For each grid point: if an original exists, it is used; otherwise f(prev, next, target) provides the value.
+ *         If delta <= 0, returns a copy. Empty input returns empty.
+ */
+func (ts *TimeSeries) Resample(delta time.Duration, f func(DataPoint, DataPoint, time.Time) float64) TimeSeries {
+	if ts.IsEmpty() {
+		return Empty()
+	}
+	if delta <= 0 {
+		return FromDataPoints(ts.DataPoints())
+	}
+
+	points := ts.DataPoints()
+	result := EmptyLabeled(ts.label + " resampled")
+
+	start := points[0].Timestamp
+	end := points[len(points)-1].Timestamp
+
+	for t := start; !t.After(end); t = t.Add(delta) {
+		// Find bracketing points for t
+		prevIdx := -1
+		nextIdx := -1
+		for i := 0; i < len(points); i++ {
+			if points[i].Timestamp.Equal(t) {
+				result.AddPoint(points[i])
+				prevIdx = -2 // mark exact hit
+				break
+			}
+			if points[i].Timestamp.Before(t) {
+				prevIdx = i
+			} else if points[i].Timestamp.After(t) {
+				nextIdx = i
+				break
+			}
+		}
+
+		if prevIdx >= 0 && nextIdx >= 0 {
+			val := f(points[prevIdx], points[nextIdx], t)
+			result.AddPoint(DataPoint{Timestamp: t, Value: val})
+		}
+	}
+
+	return result
+}
+
+/**
+ * Resamples the TimeSeries on a fixed interval, filling gaps with a default value.
+ *
+ * @param delta The step between consecutive timestamps in the resampled series.
+ * @param defaultValue Value used for any interpolated points.
+ *
+ * @return A new TimeSeries containing all original points plus default-filled points. If delta <= 0, returns a copy. Empty input returns empty.
+ */
+func (ts *TimeSeries) ResampleWithDefaultValue(delta time.Duration, defaultValue float64) TimeSeries {
+	return ts.Resample(delta, func(d1 DataPoint, d2 DataPoint, idx time.Time) float64 {
+		return defaultValue
+	})
+}
+
+/**
+ * Interpolates the TimeSeries on a fixed interval using linear interpolation.
+ *
+ * @param delta The step between consecutive timestamps in the interpolated series.
+ *
+ * @return A new TimeSeries on a regular grid, with missing values linearly interpolated. If delta <= 0, returns a copy. Empty input returns empty.
+ */
+func (ts *TimeSeries) Interpolate(delta time.Duration) TimeSeries {
+	return ts.Resample(delta, func(d1 DataPoint, d2 DataPoint, idx time.Time) float64 {
+		total := d2.Timestamp.Sub(d1.Timestamp).Seconds()
+		if total == 0 {
+			return d1.Value
+		}
+		elapsed := idx.Sub(d1.Timestamp).Seconds()
+		return d1.Value + (d2.Value-d1.Value)*(elapsed/total)
+	})
+}
+
+/**
+ * Steps the TimeSeries on a fixed interval, splitting each value evenly across the gap to the next point.
+ * Example: value 10 at 1h, delta 15m -> four points of 2.5 within that hour.
+ *
+ * @param delta The step between consecutive timestamps in the stepped series.
+ *
+ * @return A new TimeSeries on a regular grid where each original value is distributed across sub-intervals.
+ *         If delta <= 0, returns a copy. Empty input returns empty.
+ */
+func (ts *TimeSeries) Step(delta time.Duration) TimeSeries {
+	if ts.IsEmpty() {
+		return Empty()
+	}
+	if delta <= 0 {
+		return FromDataPoints(ts.DataPoints())
+	}
+
+	points := ts.DataPoints()
+	result := EmptyLabeled(ts.label + " step")
+
+	for i := 0; i < len(points)-1; i++ {
+		prev := points[i]
+		next := points[i+1]
+
+		gap := next.Timestamp.Sub(prev.Timestamp)
+		if gap <= 0 {
+			continue
+		}
+		steps := int(gap / delta)
+		if steps == 0 {
+			continue
+		}
+
+		fraction := prev.Value * delta.Seconds() / gap.Seconds()
+		for j := 1; j <= steps; j++ {
+			tsAt := prev.Timestamp.Add(time.Duration(j) * delta)
+			result.AddPoint(DataPoint{Timestamp: tsAt, Value: fraction})
+		}
+	}
+
+	return result
+}
+
+/**
  * Groups the TimeSeries by a specified time function and aggregates the values using a provided function.
  *
  * @param g A function that takes a time.Time and returns a grouped time.Time (e.g., rounding to the nearest hour).

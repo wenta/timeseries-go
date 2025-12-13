@@ -1,6 +1,7 @@
 package timeseriesgo
 
 import (
+	"math"
 	"testing"
 	"time"
 )
@@ -419,6 +420,204 @@ func TestRollingWindow(t *testing.T) {
 		expDp := expected.DataPoints()[i]
 		if !dp.Timestamp.Equal(expDp.Timestamp) || dp.Value != expDp.Value {
 			t.Errorf("At index %d, expected datapoint %+v, got %+v", i, expDp, dp)
+		}
+	}
+}
+
+func TestResampleWithDefaultValueFillsMissing(t *testing.T) {
+	base := time.Unix(0, 0)
+	ts := Empty()
+	ts.AddPoint(DataPoint{Timestamp: base.Add(1 * time.Second), Value: 1})
+	ts.AddPoint(DataPoint{Timestamp: base.Add(2 * time.Second), Value: 2})
+	ts.AddPoint(DataPoint{Timestamp: base.Add(3 * time.Second), Value: 3})
+	ts.AddPoint(DataPoint{Timestamp: base.Add(5 * time.Second), Value: 5})
+
+	resampled := ts.ResampleWithDefaultValue(1*time.Second, 1)
+
+	expectedTimes := []time.Time{
+		base.Add(1 * time.Second),
+		base.Add(2 * time.Second),
+		base.Add(3 * time.Second),
+		base.Add(4 * time.Second),
+		base.Add(5 * time.Second),
+	}
+	expectedValues := []float64{1, 2, 3, 1, 5}
+
+	if resampled.Length() != len(expectedTimes) {
+		t.Fatalf("expected %d points after resample, got %d", len(expectedTimes), resampled.Length())
+	}
+
+	for i, dp := range resampled.DataPoints() {
+		if !dp.Timestamp.Equal(expectedTimes[i]) {
+			t.Errorf("idx %d expected timestamp %v, got %v", i, expectedTimes[i], dp.Timestamp)
+		}
+		if dp.Value != expectedValues[i] {
+			t.Errorf("idx %d expected value %v, got %v", i, expectedValues[i], dp.Value)
+		}
+	}
+}
+
+func TestResampleZeroDeltaReturnsOriginal(t *testing.T) {
+	base := time.Unix(0, 0)
+	ts := Empty()
+	ts.AddPoint(DataPoint{Timestamp: base, Value: 1})
+	ts.AddPoint(DataPoint{Timestamp: base.Add(time.Second), Value: 3})
+
+	res := ts.Resample(0, func(d1 DataPoint, d2 DataPoint, idx time.Time) float64 {
+		return 2
+	})
+
+	if res.Length() != ts.Length() {
+		t.Fatalf("expected resampled length %d, got %d", ts.Length(), res.Length())
+	}
+	for i, dp := range res.DataPoints() {
+		orig := ts.DataPoints()[i]
+		if !dp.Timestamp.Equal(orig.Timestamp) || dp.Value != orig.Value {
+			t.Errorf("idx %d expected %+v, got %+v", i, orig, dp)
+		}
+	}
+}
+
+func TestResampleEmptySeriesReturnsEmpty(t *testing.T) {
+	ts := Empty()
+	res := ts.Resample(1*time.Second, func(d1 DataPoint, d2 DataPoint, idx time.Time) float64 {
+		return 0
+	})
+	if !res.IsEmpty() {
+		t.Fatalf("expected empty result for empty input, got length %d", res.Length())
+	}
+}
+
+func TestResampleLargeDeltaKeepsOriginalPoints(t *testing.T) {
+	base := time.Unix(0, 0)
+	ts := Empty()
+	ts.AddPoint(DataPoint{Timestamp: base.Add(1 * time.Second), Value: 1})
+	ts.AddPoint(DataPoint{Timestamp: base.Add(3 * time.Second), Value: 3})
+	ts.AddPoint(DataPoint{Timestamp: base.Add(4 * time.Second), Value: 4})
+
+	res := ts.Resample(10*time.Second, func(d1 DataPoint, d2 DataPoint, idx time.Time) float64 {
+		return 999 // should not be used
+	})
+
+	if res.Length() != 1 {
+		t.Fatalf("expected only the first grid-aligned point, got %d", res.Length())
+	}
+	if !res.DataPoints()[0].Timestamp.Equal(base.Add(1*time.Second)) || res.DataPoints()[0].Value != 1 {
+		t.Fatalf("unexpected point %+v", res.DataPoints()[0])
+	}
+}
+
+func TestResampleWithInterpolationFunction(t *testing.T) {
+	base := time.Unix(0, 0)
+	ts := Empty()
+	ts.AddPoint(DataPoint{Timestamp: base.Add(0 * time.Second), Value: 0})
+	ts.AddPoint(DataPoint{Timestamp: base.Add(2 * time.Second), Value: 2})
+
+	res := ts.Resample(1*time.Second, func(d1 DataPoint, d2 DataPoint, idx time.Time) float64 {
+		// linear interpolation between d1 (previous) and d2 (next)
+		total := d2.Timestamp.Sub(d1.Timestamp).Seconds()
+		elapsed := idx.Sub(d1.Timestamp).Seconds()
+		return d1.Value + (d2.Value-d1.Value)*(elapsed/total)
+	})
+
+	expected := []DataPoint{
+		{Timestamp: base.Add(0 * time.Second), Value: 0},
+		{Timestamp: base.Add(1 * time.Second), Value: 1},
+		{Timestamp: base.Add(2 * time.Second), Value: 2},
+	}
+
+	if res.Length() != len(expected) {
+		t.Fatalf("expected %d points, got %d", len(expected), res.Length())
+	}
+	for i, dp := range res.DataPoints() {
+		if !dp.Timestamp.Equal(expected[i].Timestamp) || math.Abs(dp.Value-expected[i].Value) > 1e-9 {
+			t.Errorf("idx %d expected %+v, got %+v", i, expected[i], dp)
+		}
+	}
+}
+
+func TestResampleSinglePointDeltaPositiveReturnsCopy(t *testing.T) {
+	base := time.Unix(0, 0)
+	ts := Empty()
+	ts.AddPoint(DataPoint{Timestamp: base, Value: 5})
+
+	res := ts.Resample(2*time.Second, func(d1 DataPoint, d2 DataPoint, idx time.Time) float64 {
+		return 0
+	})
+
+	if res.Length() != ts.Length() {
+		t.Fatalf("expected length %d, got %d", ts.Length(), res.Length())
+	}
+	if !res.DataPoints()[0].Timestamp.Equal(base) || res.DataPoints()[0].Value != 5 {
+		t.Fatalf("expected original point preserved, got %+v", res.DataPoints()[0])
+	}
+}
+
+func TestResampleGapLargerThanDeltaInsertsAllGridPoints(t *testing.T) {
+	base := time.Unix(0, 0)
+	ts := Empty()
+	ts.AddPoint(DataPoint{Timestamp: base, Value: 0})
+	ts.AddPoint(DataPoint{Timestamp: base.Add(10 * time.Second), Value: 10})
+
+	res := ts.Resample(2*time.Second, func(d1 DataPoint, d2 DataPoint, idx time.Time) float64 {
+		// linear interpolation
+		total := d2.Timestamp.Sub(d1.Timestamp).Seconds()
+		elapsed := idx.Sub(d1.Timestamp).Seconds()
+		return d1.Value + (d2.Value-d1.Value)*(elapsed/total)
+	})
+
+	expectedValues := []float64{0, 2, 4, 6, 8, 10}
+	if res.Length() != len(expectedValues) {
+		t.Fatalf("expected %d points, got %d", len(expectedValues), res.Length())
+	}
+	for i, dp := range res.DataPoints() {
+		if dp.Value != expectedValues[i] {
+			t.Errorf("idx %d expected value %.0f, got %.0f", i, expectedValues[i], dp.Value)
+		}
+	}
+}
+
+func TestInterpolateLinear(t *testing.T) {
+	base := time.Unix(0, 0)
+	ts := Empty()
+	ts.AddPoint(DataPoint{Timestamp: base, Value: 0})
+	ts.AddPoint(DataPoint{Timestamp: base.Add(2 * time.Second), Value: 2})
+
+	res := ts.Interpolate(1 * time.Second)
+
+	expected := []DataPoint{
+		{Timestamp: base, Value: 0},
+		{Timestamp: base.Add(1 * time.Second), Value: 1},
+		{Timestamp: base.Add(2 * time.Second), Value: 2},
+	}
+	if res.Length() != len(expected) {
+		t.Fatalf("expected %d points, got %d", len(expected), res.Length())
+	}
+	for i, dp := range res.DataPoints() {
+		if !dp.Timestamp.Equal(expected[i].Timestamp) || math.Abs(dp.Value-expected[i].Value) > 1e-9 {
+			t.Errorf("idx %d expected %+v, got %+v", i, expected[i], dp)
+		}
+	}
+}
+
+func TestStepCarriesForward(t *testing.T) {
+	base := time.Unix(0, 0)
+	ts := Empty()
+	ts.AddPoint(DataPoint{Timestamp: base, Value: 5})
+	ts.AddPoint(DataPoint{Timestamp: base.Add(4 * time.Second), Value: 7})
+
+	res := ts.Step(2 * time.Second)
+
+	expected := []DataPoint{
+		{Timestamp: base.Add(2 * time.Second), Value: 2.5}, // 5 split into 2 steps
+		{Timestamp: base.Add(4 * time.Second), Value: 2.5},
+	}
+	if res.Length() != len(expected) {
+		t.Fatalf("expected %d points, got %d", len(expected), res.Length())
+	}
+	for i, dp := range res.DataPoints() {
+		if !dp.Timestamp.Equal(expected[i].Timestamp) || dp.Value != expected[i].Value {
+			t.Errorf("idx %d expected %+v, got %+v", i, expected[i], dp)
 		}
 	}
 }

@@ -14,7 +14,7 @@ Package docs: https://pkg.go.dev/github.com/wenta/timeseries-go
     * [ ] Differentiation
     * [x] groupBy
     * [x] Rolling window
-    * [ ] Resampling
+    * [x] Resampling
     * [x] Join 
     * [x] Merge
 
@@ -27,7 +27,7 @@ Package docs: https://pkg.go.dev/github.com/wenta/timeseries-go
   * Data cleaning & missing data
     * [ ] Handling missing timestamps (gaps) in time axis
     * [ ] Forward-fill / back-fill of missing values
-    * [ ] Interpolation (e.g. linear / step)
+    * [x] Interpolation (e.g. linear / step)
     * [ ] Simple outlier detection and clipping/removal
 
   * Time & indexing utilities
