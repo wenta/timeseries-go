@@ -638,6 +638,29 @@ func (ts *TimeSeries) Percentile(p int) (float64, error) {
 	}
 }
 
+/**
+* Return new series with difference between 2 points
+*
+ */
+func (ts *TimeSeries) Differentiate() TimeSeries {
+	if ts.Length() < 2 {
+		return Empty()
+	}
+	result := Empty()
+
+	prev, _ := ts.Head()
+
+	tail := ts.Tail()
+
+	for _, dp := range tail.datapoints {
+		result.AddPoint(DataPoint{dp.Timestamp, dp.Value - prev.Value})
+		prev = dp
+	}
+
+	return result
+
+}
+
 func (ts *TimeSeries) Median() (float64, error) {
 	return ts.Percentile(50)
 }
