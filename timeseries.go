@@ -643,10 +643,10 @@ func (ts *TimeSeries) Percentile(p int) (float64, error) {
 *
  */
 func (ts *TimeSeries) Differentiate() TimeSeries {
-	if ts.Length() < 2 {
-		return Empty()
-	}
 	result := Empty()
+	if ts.Length() < 2 {
+		return result
+	}
 
 	prev, _ := ts.Head()
 
@@ -654,6 +654,30 @@ func (ts *TimeSeries) Differentiate() TimeSeries {
 
 	for _, dp := range tail.datapoints {
 		result.AddPoint(DataPoint{dp.Timestamp, dp.Value - prev.Value})
+		prev = dp
+	}
+
+	return result
+
+}
+
+/**
+* Return new series with sum between 2 points
+*
+ */
+func (ts *TimeSeries) Integrate() TimeSeries {
+	result := Empty()
+
+	if ts.Length() < 2 {
+		return result
+	}
+
+	prev := ts.datapoints[0]
+
+	tail := ts.Tail()
+
+	for _, dp := range tail.datapoints {
+		result.AddPoint(DataPoint{dp.Timestamp, dp.Value + prev.Value})
 		prev = dp
 	}
 

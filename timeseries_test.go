@@ -381,6 +381,32 @@ func TestDifferentiate(t *testing.T) {
 	}
 }
 
+func TestIntegrate(t *testing.T) {
+	ts := Empty()
+	now := time.Now()
+
+	ts.AddPoint(DataPoint{Timestamp: now, Value: 2.0})
+	ts.AddPoint(DataPoint{Timestamp: now.Add(time.Minute), Value: -4.0})
+	ts.AddPoint(DataPoint{Timestamp: now.Add(2 * time.Minute), Value: -6.0})
+	ts.AddPoint(DataPoint{Timestamp: now.Add(3 * time.Minute), Value: 8.0})
+
+	res := ts.Integrate()
+
+	expected := []DataPoint{
+		{Timestamp: now.Add(time.Minute), Value: -2},
+		{Timestamp: now.Add(2 * time.Minute), Value: -10},
+		{Timestamp: now.Add(3 * time.Minute), Value: 2},
+	}
+	if res.Length() != len(expected) {
+		t.Fatalf("expected %d points, got %d", len(expected), res.Length())
+	}
+	for i, dp := range res.DataPoints() {
+		if !dp.Timestamp.Equal(expected[i].Timestamp) || dp.Value != expected[i].Value {
+			t.Errorf("idx %d expected %+v, got %+v", i, expected[i], dp)
+		}
+	}
+}
+
 func TestMedian(t *testing.T) {
 	ts := Empty()
 	now := time.Now()

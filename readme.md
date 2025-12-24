@@ -10,8 +10,8 @@ Package docs: https://pkg.go.dev/github.com/wenta/timeseries-go
   * Basic functionality
     * [x] Slicing series
     * [x] Map and filter
-    * [ ] Integration
-    * [ ] Differentiation
+    * [x] Integration
+    * [x] Differentiation
     * [x] groupBy
     * [x] Rolling window
     * [x] Resampling
