@@ -1,92 +1,207 @@
+# Time Series library
 
-# Welcome to the Time Series library
-
-Library for processing Time Series.
+Library for processing time series in Go.
 
 Package docs: https://pkg.go.dev/github.com/wenta/timeseries-go
 
-# Features
+Planned work: see [todo.md](todo.md).
 
-  * Basic functionality
-    * [x] Slicing series
-    * [x] Map and filter
-    * [x] Integration
-    * [x] Differentiation
-    * [x] groupBy
-    * [x] Rolling window
-    * [x] Resampling
-    * [x] Join 
-    * [x] Merge
 
-  * Calculate statistics
-    * [x] Min, max
-    * [x] Mean, variance and standard deviation
-    * [ ] Covariance and correlation
-    * [ ] Normalization
+## Common setup
 
-  * Data cleaning & missing data
-    * [ ] Handling missing timestamps (gaps) in time axis
-    * [ ] Forward-fill / back-fill of missing values
-    * [x] Interpolation (e.g. linear / step)
-    * [ ] Simple outlier detection and clipping/removal
+```go
+package main
 
-  * Time & indexing utilities
-    * [ ] Reindexing series to a given time grid
-    * [ ] Aggregation by periods (daily / weekly / monthly / custom)
-    * [ ] Business calendar support (business days vs weekends)
-    * [ ] Timezone-aware operations (convert, normalize to UTC)
+import (
+	"encoding/csv"
+	"strings"
+	"time"
 
-  * Transformations & filters
-    * [ ] Smoothing (moving average, exponential moving average)
-    * [ ] Log transform / power transforms (e.g. Box–Cox)
-    * [ ] Detrending (remove linear trend)
-    * [ ] Deseasonalization (remove seasonal component)
+	timeseriesgo "github.com/wenta/timeseries-go"
+	"github.com/wenta/timeseries-go/anomaly"
+	"github.com/wenta/timeseries-go/forecast"
+	"github.com/wenta/timeseries-go/generator"
+	"github.com/wenta/timeseries-go/metrics"
+	"github.com/wenta/timeseries-go/stats"
+	"github.com/wenta/timeseries-go/tsio"
+)
 
-  * Decomposition & spectral analysis
-    * [ ] Time series decomposition: trend + seasonality + residual
-    * [ ] FFT / power spectrum computation
+func main() {
+	base := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
 
-  * Advanced statistics & features
-    * [ ] Rolling / expanding statistics (rolling mean/var/min/max)
-    * [ ] Exponentially weighted statistics (EWMA, EWVAR)
-    * [ ] Feature generation for ML (lags, rolling features, calendar features)
+	ts := timeseriesgo.Empty()
+	ts.AddPoint(timeseriesgo.DataPoint{Timestamp: base, Value: 10})
+	ts.AddPoint(timeseriesgo.DataPoint{Timestamp: base.Add(time.Hour), Value: 12})
+	ts.AddPoint(timeseriesgo.DataPoint{Timestamp: base.Add(2 * time.Hour), Value: 9})
+}
+```
 
-  * Metrics
-    * [x] MSE and RMSE between 2 series
-    * [x] MAE between 2 series
-    * [ ] MAPE between 2 series
-    * [x] MAD on series
+## Implemented functions
 
-  * ARIMA
-    * [ ] Check if series is stationary
-    * [ ] AR(p) – Autoregressive
-    * [ ] I(d) – Integrate
-    * [ ] MA(q) – Moving average
+#### Core construction and access (timeseriesgo)
+Create and inspect series basics.
+```go
+labeled := timeseriesgo.EmptyLabeled("cpu")
+labeled.AddPoint(timeseriesgo.DataPoint{Timestamp: base, Value: 3})
+labeled.Length()
 
-  * Forecasting (beyond ARIMA)
-    * [x] Naive forecast (last value, seasonal naive)
-    * [ ] Simple / double / triple exponential smoothing (Holt–Winters)
-    * [ ] Time-series cross-validation (walk-forward validation)
+points := []timeseriesgo.DataPoint{
+	{Timestamp: base.Add(3 * time.Hour), Value: 7},
+}
+fromPoints := timeseriesgo.FromDataPoints(points)
+fromPoints.Print()
 
-  * IO & interoperability
-    * [x] Read data to/from CSV string
-    * [ ] Read/write JSON (e.g. NDJSON)
+timestamps := []time.Time{base, base.Add(time.Hour)}
+values := []float64{10, 11}
+zipped, _ := timeseriesgo.Zip(timestamps, values)
 
-  * Generators
-    * [x] Constant series
-    * [ ] Random noise
-    * [x] Random walk
-    * [x] Periodic pattern
+tsTimes, tsValues := zipped.UnZip()
 
-  * Anomaly detection
-    * [x] Z-score / robust z-score based detection
-    * [ ] Threshold-based detection on residuals (e.g. from ARIMA or smoothing)
-    * [x] Simple rule-based anomaly flags (spikes, drops, flat-lines)
+vals := ts.Values()
+times := ts.Timestamps()
+raw := ts.DataPoints()
 
-  * Advanced functionality
-    * [ ] Finding sessions (periods of activity)
-    * [ ] Labeling events/windows (e.g. storms, campaigns, outages)
+first, _ := ts.Head()
+last, _ := ts.Last()
+tail := ts.Tail()
 
+resolution, _ := ts.Resolution()
+
+ts.Print()
+```
+
+#### Slicing and transforms (timeseriesgo)
+Slice, map, and filter values.
+```go
+start := base.Add(30 * time.Minute)
+end := base.Add(2 * time.Hour)
+
+sub := ts.Slice(start, end)
+scaled := ts.MapValues(func(v float64) float64 { return v * 2 })
+shifted := ts.Map(func(dp timeseriesgo.DataPoint) timeseriesgo.DataPoint {
+	dp.Value += 1
+	return dp
+})
+high := ts.Filter(func(dp timeseriesgo.DataPoint) bool { return dp.Value > 10 })
+```
+
+#### Resampling and interpolation (timeseriesgo)
+Resample on a fixed grid.
+```go
+rs := ts.Resample(time.Minute, func(a, b timeseriesgo.DataPoint, t time.Time) float64 {
+	return a.Value
+})
+rsDefault := ts.ResampleWithDefaultValue(time.Minute, 0)
+lin := ts.Interpolate(time.Minute)
+stepSeries := ts.Step(time.Minute)
+```
+
+#### Grouping and rolling (timeseriesgo, stats)
+Aggregate by time buckets and compute rolling stats.
+```go
+hourly := ts.GroupByTime(
+	func(t time.Time) time.Time { return t.Truncate(time.Hour) },
+	func(points []timeseriesgo.DataPoint) float64 { return float64(len(points)) },
+)
+roll := ts.RollingWindow(time.Hour, func(values []float64) float64 {
+	return values[len(values)-1]
+})
+ma := stats.MovingAverage(ts, time.Hour)
+
+```
+
+#### Joins and merge (timeseriesgo)
+Combine multiple series.
+```go
+other := ts.MapValues(func(v float64) float64 { return v - 1 })
+
+merged := ts.Merge(other)
+inner := ts.Join(other)
+leftJoin := ts.JoinLeft(other, 0)
+outer := ts.JoinOuter(other, 0, 0)
+```
+
+#### Aligned series helpers (timeseriesgo)
+Work with joined series.
+```go
+other := ts.MapValues(func(v float64) float64 { return v + 1 })
+
+aligned := ts.Join(other)
+count := aligned.Length()
+pairs := aligned.DataPoints()
+pairDiff := aligned.MapValuesWithReduce(func(l, r float64) float64 { return l - r })
+
+aligned.Print()
+```
+
+#### Statistics (timeseriesgo, stats)
+Basic stats and transforms.
+```go
+min, _ := ts.Min()
+max, _ := ts.Max()
+total := ts.Sum()
+p95, _ := ts.Percentile(95)
+median, _ := ts.Median()
+diffSeries := ts.Differentiate()
+integ := ts.Integrate()
+mv, _ := stats.GetMeanAndVariance(ts)
+```
+
+#### Metrics (metrics)
+Compare series.
+```go
+other := ts.MapValues(func(v float64) float64 { return v - 1 })
+
+mse, _ := metrics.MSE(ts, other)
+rmse, _ := metrics.RMSE(ts, other)
+mae, _ := metrics.MAE(ts, other)
+mad, _ := metrics.MAD(ts)
+
+```
+
+#### Forecasting (forecast)
+Naive forecasts.
+```go
+fc := forecast.Naive(ts, 3)
+```
+
+#### Generators (generator)
+Create synthetic series.
+```go
+index := generator.MakeSeriesIndex(base, time.Hour, 4)
+constant := generator.Constant(index, 5)
+walk := generator.RandomWalk(index, 10)
+
+patternIndex := generator.MakeSeriesIndex(base, time.Hour, 2)
+pattern := generator.Constant(patternIndex, 1)
+loop := generator.Repeat(pattern, base, base.Add(4*time.Hour))
+```
+
+#### Anomaly detection (anomaly)
+Detect spikes and anomalies.
+```go
+zs, _ := anomaly.ZScore(ts)
+flags, _ := anomaly.FindAnomaliesWithZScore(ts)
+rz, _ := anomaly.RobustZScore(ts)
+rflags, _ := anomaly.FindAnomaliesWithRobustZScore(ts)
+spikes, _ := anomaly.FindSpikeAnomalies(ts, 3)
+drops, _ := anomaly.FindDropAnomalies(ts, 3)
+flat, _ := anomaly.FindFlatlineAnomalies(ts, 0.1, 2)
+```
+
+#### IO (tsio)
+CSV serialization.
+```go
+csvStr, _ := tsio.ToString(ts)
+csvStr2, _ := tsio.ToStringWithTimeFormat(ts, time.RFC3339)
+
+r := csv.NewReader(strings.NewReader(csvStr))
+parsed, _ := tsio.FromString(*r, "cpu")
+
+r2 := csv.NewReader(strings.NewReader(csvStr))
+parsed2, _ := tsio.FromStringWithTimeFormat(*r2, time.RFC3339, "cpu")
+
+```
 
 # Join in!
 
