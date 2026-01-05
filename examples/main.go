@@ -32,14 +32,18 @@ func main() {
 	fc := forecast.Naive(series, 3)
 	fmt.Println("Naive forecast values:", fc.Values())
 
-	// 3) Z-Score anomalies on the original series.
+	// 3) Simple exponential smoothing forecast.
+	ses := forecast.SimpleExponentialSmoothing(series, 0.2, 3)
+	fmt.Println("SES forecast values:", ses.Values())
+
+	// 4) Z-Score anomalies on the original series.
 	flags, err := anomaly.FindAnomaliesWithZScore(series)
 	if err != nil {
 		log.Fatalf("zscore failed: %v", err)
 	}
 	fmt.Println("Z-Score anomaly flags:", flags.Values())
 
-	// 4) Serialize to CSV and back.
+	// 5) Serialize to CSV and back.
 	csvStr, err := tsio.ToString(series)
 	if err != nil {
 		log.Fatalf("serialize failed: %v", err)
@@ -52,7 +56,7 @@ func main() {
 	}
 	fmt.Printf("Reloaded length: %d\n", reloaded.Length())
 
-	// 5) Compare two series: MSE/RMSE/MAE.
+	// 6) Compare two series: MSE/RMSE/MAE.
 	index2 := generator.MakeSeriesIndex(base, 30*time.Minute, 10)
 	series2 := generator.Constant(index2, 9)
 	mse, _ := metrics.MSE(series, series2)
@@ -60,7 +64,7 @@ func main() {
 	mae, _ := metrics.MAE(series, series2)
 	fmt.Printf("MSE=%.2f RMSE=%.2f MAE=%.2f\n", mse, rmse, mae)
 
-	// 6) Detect spikes in a random walk.
+	// 7) Detect spikes in a random walk.
 	walk := generator.RandomWalk(index, 0)
 	spikeFlags, err := anomaly.FindSpikeAnomalies(walk, 3)
 	if err != nil {
@@ -68,7 +72,7 @@ func main() {
 	}
 	fmt.Println("Random walk spike flags:", spikeFlags.Values())
 
-	// 7) Merge forecast with original and compute MAD on spike flags.
+	// 8) Merge forecast with original and compute MAD on spike flags.
 	merged := series.Merge(fc)
 	fmt.Println("Merged series length:", merged.Length())
 	mad, _ := metrics.MAD(spikeFlags)
