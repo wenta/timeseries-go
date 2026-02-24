@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/rand/v2"
 	"time"
 )
 
@@ -180,6 +181,25 @@ func Zip(timestamps []time.Time, values []float64) (TimeSeries, error) {
 		}
 	}
 	return TimeSeries{datapoints: points}, nil
+}
+
+func RandomNoise(start time.Time, n int, step time.Duration) TimeSeries {
+	if n <= 0 {
+		return Empty()
+	}
+
+	ts := Empty()
+	current := start
+
+	for i := 0; i < n; i++ {
+		ts.AddPoint(DataPoint{
+			Timestamp: current,
+			Value:     rand.Float64(),
+		})
+		current = current.Add(step)
+	}
+
+	return ts
 }
 
 /**
