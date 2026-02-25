@@ -76,3 +76,51 @@ func MovingAverage(ts timeseriesgo.TimeSeries, window time.Duration) timeseriesg
 
 	return result
 }
+
+// MinMaxNormalize rescales values to the [0,1] range while preserving timestamps.
+// Returns error if the TimeSeries is empty.
+func MinMaxNormalize(ts timeseriesgo.TimeSeries) (timeseriesgo.TimeSeries, error) {
+	if ts.IsEmpty() {
+		return timeseriesgo.Empty(), errors.New("TimeSeries is empty")
+	}
+
+	points := ts.DataPoints()
+
+	minVal := points[0].Value
+	maxVal := points[0].Value
+
+	// Find min and max
+	for _, dp := range points {
+		if dp.Value < minVal {
+			minVal = dp.Value
+		}
+		if dp.Value > maxVal {
+			maxVal = dp.Value
+		}
+	}
+
+	result := timeseriesgo.Empty()
+
+	// Avoid division by zero when all values are equal
+	if maxVal == minVal {
+		for _, dp := range points {
+			result.AddPoint(timeseriesgo.DataPoint{
+				Timestamp: dp.Timestamp,
+				Value:     0.0,
+			})
+		}
+		return result, nil
+	}
+
+	// Apply normalization
+	denominator := maxVal - minVal
+	for _, dp := range points {
+		normalized := (dp.Value - minVal) / denominator
+		result.AddPoint(timeseriesgo.DataPoint{
+			Timestamp: dp.Timestamp,
+			Value:     normalized,
+		})
+	}
+
+	return result, nil
+}
