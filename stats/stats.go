@@ -2,6 +2,7 @@ package stats
 
 import (
 	"errors"
+	"math"
 	"time"
 
 	timeseriesgo "github.com/wenta/timeseries-go"
@@ -123,4 +124,67 @@ func MinMaxNormalize(ts timeseriesgo.TimeSeries) (timeseriesgo.TimeSeries, error
 	}
 
 	return result, nil
+func Correlation(ts1, ts2 timeseriesgo.TimeSeries) (float64, error) {
+	if ts1.IsEmpty() || ts2.IsEmpty() {
+		return 0, errors.New("one or both TimeSeries are empty")
+	}
+
+	points1 := ts1.DataPoints()
+	points2 := ts2.DataPoints()
+
+	
+	valueMap := make(map[int64]float64)
+	for _, p := range points1 {
+		valueMap[p.Timestamp.UnixNano()] = p.Value
+	}
+
+	var aligned1 []timeseriesgo.DataPoint
+	var aligned2 []timeseriesgo.DataPoint
+
+	for _, p := range points2 {
+		if v, ok := valueMap[p.Timestamp.UnixNano()]; ok {
+			aligned1 = append(aligned1, timeseriesgo.DataPoint{
+				Timestamp: p.Timestamp,
+				Value:     v,
+			})
+			aligned2 = append(aligned2, p)
+		}
+	}
+
+	if len(aligned1) < 2 {
+		return 0, errors.New("not enough aligned points")
+	}
+
+	series1 := timeseriesgo.FromDataPoints(aligned1)
+	series2 := timeseriesgo.FromDataPoints(aligned2)
+
+	stats1, err := GetMeanAndVariance(series1)
+	if err != nil {
+		return 0, err
+	}
+
+	stats2, err := GetMeanAndVariance(series2)
+	if err != nil {
+		return 0, err
+	}
+
+	
+	if stats1.SampleVariance == 0 || stats2.SampleVariance == 0 {
+		return 0, errors.New("zero variance in one of the series")
+	}
+
+	
+	covariance := 0.0
+	for i := range aligned1 {
+		dx := aligned1[i].Value - stats1.Mean
+		dy := aligned2[i].Value - stats2.Mean
+		covariance += dx * dy
+	}
+
+	covariance /= float64(len(aligned1) - 1)
+
+	
+	correlation := covariance / (math.Sqrt(stats1.SampleVariance) * math.Sqrt(stats2.SampleVariance))
+
+	return correlation, nil
 }
