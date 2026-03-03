@@ -123,3 +123,97 @@ func TestCorrelationEdgeCases(t *testing.T) {
 		t.Errorf("expected error for insufficient points")
 	}
 }
+
+func TestMinMaxNormalize(t *testing.T) {
+	base := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+
+	ts := timeseriesgo.Empty()
+	ts.AddPoint(timeseriesgo.DataPoint{Timestamp: base, Value: 0})
+	ts.AddPoint(timeseriesgo.DataPoint{Timestamp: base.Add(time.Minute), Value: 5})
+	ts.AddPoint(timeseriesgo.DataPoint{Timestamp: base.Add(2 * time.Minute), Value: 10})
+
+	result, err := MinMaxNormalize(ts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expected := []float64{0.0, 0.5, 1.0}
+	for i, dp := range result.DataPoints() {
+		tsPoints := ts.DataPoints()
+		if dp.Timestamp != tsPoints[i].Timestamp {
+			t.Errorf("at idx %d: expected timestamp %v, got %v", i, tsPoints[i].Timestamp, dp.Timestamp)
+		}
+		if dp.Value-expected[i] > 0.0001 {
+			t.Errorf("at idx %d: expected value %.4f, got %.4f", i, expected[i], dp.Value)
+		}
+	}
+}
+
+func TestMinMaxNormalizeAllEqual(t *testing.T) {
+	base := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+
+	ts := timeseriesgo.Empty()
+	ts.AddPoint(timeseriesgo.DataPoint{Timestamp: base, Value: 7})
+	ts.AddPoint(timeseriesgo.DataPoint{Timestamp: base.Add(time.Minute), Value: 7})
+	ts.AddPoint(timeseriesgo.DataPoint{Timestamp: base.Add(2 * time.Minute), Value: 7})
+
+	result, err := MinMaxNormalize(ts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	for i, dp := range result.DataPoints() {
+		if dp.Value != 0.0 {
+			t.Errorf("at idx %d: expected 0.0 for equal values, got %f", i, dp.Value)
+		}
+	}
+}
+
+func TestMinMaxNormalizeEmpty(t *testing.T) {
+	ts := timeseriesgo.Empty()
+	_, err := MinMaxNormalize(ts)
+	if err == nil {
+		t.Error("expected error for empty TimeSeries, got nil")
+	}
+}
+
+func TestMinMaxNormalizeSinglePoint(t *testing.T) {
+	base := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+
+	ts := timeseriesgo.Empty()
+	ts.AddPoint(timeseriesgo.DataPoint{Timestamp: base, Value: 42})
+
+	result, err := MinMaxNormalize(ts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	points := result.DataPoints()
+	if len(points) != 1 {
+		t.Fatalf("expected 1 point, got %d", len(points))
+	}
+	if points[0].Value != 0.0 {
+		t.Errorf("expected 0.0 for single point, got %f", points[0].Value)
+	}
+}
+
+func TestMinMaxNormalizeNegativeValues(t *testing.T) {
+	base := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+
+	ts := timeseriesgo.Empty()
+	ts.AddPoint(timeseriesgo.DataPoint{Timestamp: base, Value: -10})
+	ts.AddPoint(timeseriesgo.DataPoint{Timestamp: base.Add(time.Minute), Value: 0})
+	ts.AddPoint(timeseriesgo.DataPoint{Timestamp: base.Add(2 * time.Minute), Value: 10})
+
+	result, err := MinMaxNormalize(ts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expected := []float64{0.0, 0.5, 1.0}
+	for i, dp := range result.DataPoints() {
+		if dp.Value-expected[i] > 0.0001 {
+			t.Errorf("at idx %d: expected %.4f, got %.4f", i, expected[i], dp.Value)
+		}
+	}
+}
