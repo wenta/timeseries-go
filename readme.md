@@ -160,10 +160,12 @@ mad, _ := metrics.MAD(ts)
 ```
 
 #### Forecasting (forecast)
-Naive forecasts and simple exponential smoothing.
+Naive forecasts, simple exponential smoothing, and Holt linear trend.
 ```go
 fc := forecast.Naive(ts, 3)
 ses := forecast.SimpleExponentialSmoothing(ts, 0.2, 3)
+holt := forecast.DoubleExponentialSmoothing(ts, 0.8, 0.2, 3)
+holtEstimated := forecast.DoubleExponentialSmoothingEstimated(ts, 0.8, 0.2, 3)
 ```
 
 #### Generators (generator)
