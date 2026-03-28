@@ -174,6 +174,7 @@ Create synthetic series.
 index := generator.MakeSeriesIndex(base, time.Hour, 4)
 constant := generator.Constant(index, 5)
 walk := generator.RandomWalk(index, 10)
+noise := generator.RandomNoise(index, 0, 1)
 
 patternIndex := generator.MakeSeriesIndex(base, time.Hour, 2)
 pattern := generator.Constant(patternIndex, 1)

@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -51,6 +52,65 @@ func TestGenerateRandomWalk(t *testing.T) {
 		t.Errorf("Expected TimeSeries length %d, got %d", count, ts.Length())
 	}
 
+}
+
+func TestGenerateRandomNoiseZeroStddev(t *testing.T) {
+	start := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	interval := time.Minute
+	count := 10
+	mean := 42.5
+	index := MakeSeriesIndex(start, interval, count)
+
+	ts := RandomNoise(index, mean, 0)
+
+	if ts.Length() != count {
+		t.Fatalf("Expected TimeSeries length %d, got %d", count, ts.Length())
+	}
+
+	for i, dp := range ts.DataPoints() {
+		expectedTime := start.Add(time.Duration(i) * interval)
+		if !dp.Timestamp.Equal(expectedTime) {
+			t.Errorf("At index %d: expected timestamp %v, got %v", i, expectedTime, dp.Timestamp)
+		}
+		if dp.Value != mean {
+			t.Errorf("At index %d: expected value %f, got %f", i, mean, dp.Value)
+		}
+	}
+}
+
+func TestGenerateRandomNoiseApproximateMoments(t *testing.T) {
+	start := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	count := 10000
+	mean := 5.0
+	stddev := 2.0
+	index := MakeSeriesIndex(start, time.Second, count)
+
+	ts := RandomNoise(index, mean, stddev)
+
+	if ts.Length() != count {
+		t.Fatalf("Expected TimeSeries length %d, got %d", count, ts.Length())
+	}
+
+	values := ts.Values()
+	var sum float64
+	for _, v := range values {
+		sum += v
+	}
+	sampleMean := sum / float64(len(values))
+
+	var squaredDiffs float64
+	for _, v := range values {
+		diff := v - sampleMean
+		squaredDiffs += diff * diff
+	}
+	sampleStddev := math.Sqrt(squaredDiffs / float64(len(values)-1))
+
+	if math.Abs(sampleMean-mean) > 0.1 {
+		t.Errorf("Expected sample mean near %f, got %f", mean, sampleMean)
+	}
+	if math.Abs(sampleStddev-stddev) > 0.1 {
+		t.Errorf("Expected sample stddev near %f, got %f", stddev, sampleStddev)
+	}
 }
 
 func TestRepeat(t *testing.T) {

@@ -69,6 +69,27 @@ func RandomWalk(index []time.Time, startValue float64) timeseriesgo.TimeSeries {
 	return ts
 }
 
+/**
+ * Generates a TimeSeries containing Gaussian random noise.
+ *
+ * @param index A slice of time.Time representing the timestamps for the DataPoints.
+ * @param mean The expected mean of the generated values.
+ * @param stddev The standard deviation of the generated values.
+ *
+ * @return A TimeSeries with DataPoints at the specified timestamps, where each
+ *         value is sampled independently from N(mean, stddev^2).
+ */
+func RandomNoise(index []time.Time, mean float64, stddev float64) timeseriesgo.TimeSeries {
+	ts := timeseriesgo.Empty()
+	for _, dt := range index {
+		ts.AddPoint(timeseriesgo.DataPoint{
+			Timestamp: dt,
+			Value:     mean + stddev*rand.NormFloat64(),
+		})
+	}
+	return ts
+}
+
 func Repeat(pattern timeseriesgo.TimeSeries, start time.Time, end time.Time) timeseriesgo.TimeSeries {
 	if pattern.IsEmpty() {
 		return timeseriesgo.Empty()
