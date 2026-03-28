@@ -24,6 +24,8 @@ func main() {
 	series := generator.RandomWalk(index, 10)
 	series.AddPoint(timeseriesgo.DataPoint{Timestamp: base.Add(5 * time.Hour), Value: 30})
 	fmt.Println("Original series values:", series.Values())
+	noise := generator.RandomNoise(index, 0, 1)
+	fmt.Println("Random noise values:", noise.Values())
 
 	ma := stats.MovingAverage(series, time.Hour)
 	fmt.Println("Hourly moving average:", ma.Values())
