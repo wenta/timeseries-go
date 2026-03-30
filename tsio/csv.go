@@ -11,8 +11,14 @@ import (
 )
 
 /**
- * Parses a CSV reader into a TimeSeries.
+ * Parses a CSV reader into a TimeSeries using a custom time format.
  * Expected columns per row: timestamp, value (float64). No header support.
+ *
+ * @param reader The CSV reader containing the input rows.
+ * @param timeFormat The Go time layout used to parse the timestamp column.
+ * @param label The label to assign to the resulting TimeSeries.
+ *
+ * @return A parsed TimeSeries, or an error if reading or parsing fails.
  */
 func FromStringWithTimeFormat(reader csv.Reader, timeFormat string, label string) (timeseriesgo.TimeSeries, error) {
 	data, err := reader.ReadAll()
@@ -46,14 +52,28 @@ func FromStringWithTimeFormat(reader csv.Reader, timeFormat string, label string
 }
 
 /**
- * Parses a CSV reader into a TimeSeries.
+ * Parses a CSV reader into a TimeSeries using RFC3339 timestamps.
  * Expected columns per row: timestamp (RFC3339), value (float64). No header support.
+ *
+ * @param reader The CSV reader containing the input rows.
+ * @param label The label to assign to the resulting TimeSeries.
+ *
+ * @return A parsed TimeSeries, or an error if reading or parsing fails.
  */
 func FromString(reader csv.Reader, label string) (timeseriesgo.TimeSeries, error) {
 	timeFormat := time.RFC3339
 	return FromStringWithTimeFormat(reader, timeFormat, label)
 }
 
+/**
+ * Serializes a TimeSeries to CSV string using a custom time format.
+ * Output columns per row: timestamp, value (float64). No header.
+ *
+ * @param ts The TimeSeries to serialize.
+ * @param timeFormat The Go time layout used to format the timestamp column.
+ *
+ * @return A CSV string representation of the TimeSeries, or an error if writing fails.
+ */
 func ToStringWithTimeFormat(ts timeseriesgo.TimeSeries, timeFormat string) (string, error) {
 	var buf bytes.Buffer
 	w := csv.NewWriter(&buf)
@@ -75,7 +95,12 @@ func ToStringWithTimeFormat(ts timeseriesgo.TimeSeries, timeFormat string) (stri
 }
 
 /**
- * Serializes a TimeSeries to CSV string (timestamp RFC3339, value float64). No header.
+ * Serializes a TimeSeries to CSV string using RFC3339 timestamps.
+ * Output columns per row: timestamp, value (float64). No header.
+ *
+ * @param ts The TimeSeries to serialize.
+ *
+ * @return A CSV string representation of the TimeSeries, or an error if writing fails.
  */
 func ToString(ts timeseriesgo.TimeSeries) (string, error) {
 	timeFormat := time.RFC3339

@@ -16,12 +16,21 @@ type AlignedSeries struct {
 	label      string
 }
 
+/**
+ * Creates an empty AlignedSeries with the provided label.
+ *
+ * @param label The label to assign to the created aligned series.
+ *
+ * @return A new empty AlignedSeries.
+ */
 func EmptyLabeledAlignedSeries(label string) AlignedSeries {
 	return AlignedSeries{datapoints: []DoubleDataPoint{}, label: label}
 }
 
 /**
- * Prints the TimeSeries in a human-readable format.
+ * Prints the AlignedSeries in a human-readable format.
+ *
+ * @return None. The function writes the aligned series to standard output.
  */
 func (ts *AlignedSeries) Print() {
 	fmt.Println("Timestamp, Left Value, Right Value")
@@ -30,10 +39,22 @@ func (ts *AlignedSeries) Print() {
 	}
 }
 
+/**
+ * Returns the number of aligned datapoints in the series.
+ *
+ * @return The number of DoubleDataPoint entries stored in the series.
+ */
 func (ts *AlignedSeries) Length() int {
 	return len(ts.datapoints)
 }
 
+/**
+ * Maps a reducer function over aligned left and right values.
+ *
+ * @param f A function that takes the left and right values and returns a single float64 result.
+ *
+ * @return A new TimeSeries with the reduced values at the original aligned timestamps.
+ */
 func (ts *AlignedSeries) MapValuesWithReduce(f func(float64, float64) float64) TimeSeries {
 	mapped := Empty()
 	for _, dp := range ts.datapoints {
@@ -45,7 +66,11 @@ func (ts *AlignedSeries) MapValuesWithReduce(f func(float64, float64) float64) T
 	return mapped
 }
 
-// DataPoints returns a shallow copy of the underlying aligned datapoints for read-only use.
+/**
+ * Returns the aligned datapoints of the series.
+ *
+ * @return A shallow copy of the underlying DoubleDataPoint slice for safe read-only access.
+ */
 func (ts *AlignedSeries) DataPoints() []DoubleDataPoint {
 	cp := make([]DoubleDataPoint, len(ts.datapoints))
 	copy(cp, ts.datapoints)

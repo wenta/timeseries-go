@@ -17,8 +17,10 @@ type MeanAndVariance struct {
 /**
  * Calculates the mean and variance of the values in the TimeSeries.
  *
- * @ret
- **/
+ * @param ts The TimeSeries whose values are used to compute summary statistics.
+ *
+ * @return A MeanAndVariance struct containing mean, sample variance, and population variance, or an error if the series is empty.
+ */
 func GetMeanAndVariance(ts timeseriesgo.TimeSeries) (MeanAndVariance, error) {
 	if ts.IsEmpty() {
 		return MeanAndVariance{}, errors.New("TimeSeries is empty")
@@ -42,8 +44,14 @@ func GetMeanAndVariance(ts timeseriesgo.TimeSeries) (MeanAndVariance, error) {
 	}, nil
 }
 
-// MovingAverage returns a rolling mean over the given time window (t-window, t].
-// If window <= 0, it returns a shallow copy of the original series.
+/**
+ * Calculates the moving average of the TimeSeries over a trailing time window.
+ *
+ * @param ts The TimeSeries to be averaged.
+ * @param window The trailing time window used to compute each average.
+ *
+ * @return A new TimeSeries containing moving-average values at the original timestamps.
+ */
 func MovingAverage(ts timeseriesgo.TimeSeries, window time.Duration) timeseriesgo.TimeSeries {
 	if ts.IsEmpty() {
 		return timeseriesgo.Empty()
@@ -78,6 +86,14 @@ func MovingAverage(ts timeseriesgo.TimeSeries, window time.Duration) timeseriesg
 	return result
 }
 
+/**
+ * Calculates the Pearson correlation coefficient between two TimeSeries.
+ *
+ * @param ts1 The first TimeSeries to compare.
+ * @param ts2 The second TimeSeries to compare.
+ *
+ * @return The Pearson correlation coefficient computed on overlapping timestamps, or an error if the calculation cannot be performed.
+ */
 func Correlation(ts1, ts2 timeseriesgo.TimeSeries) (float64, error) {
 	if ts1.IsEmpty() || ts2.IsEmpty() {
 		return 0, errors.New("one or both TimeSeries are empty")
@@ -86,7 +102,6 @@ func Correlation(ts1, ts2 timeseriesgo.TimeSeries) (float64, error) {
 	points1 := ts1.DataPoints()
 	points2 := ts2.DataPoints()
 
-	
 	valueMap := make(map[int64]float64)
 	for _, p := range points1 {
 		valueMap[p.Timestamp.UnixNano()] = p.Value
@@ -122,12 +137,10 @@ func Correlation(ts1, ts2 timeseriesgo.TimeSeries) (float64, error) {
 		return 0, err
 	}
 
-	
 	if stats1.SampleVariance == 0 || stats2.SampleVariance == 0 {
 		return 0, errors.New("zero variance in one of the series")
 	}
 
-	
 	covariance := 0.0
 	for i := range aligned1 {
 		dx := aligned1[i].Value - stats1.Mean
@@ -137,14 +150,18 @@ func Correlation(ts1, ts2 timeseriesgo.TimeSeries) (float64, error) {
 
 	covariance /= float64(len(aligned1) - 1)
 
-	
 	correlation := covariance / (math.Sqrt(stats1.SampleVariance) * math.Sqrt(stats2.SampleVariance))
 
 	return correlation, nil
 }
 
-// MinMaxNormalize rescales values to the [0,1] range while preserving timestamps.
-// Returns error if the TimeSeries is empty.
+/**
+ * Normalizes the TimeSeries values to the [0,1] range while preserving timestamps.
+ *
+ * @param ts The TimeSeries to be normalized.
+ *
+ * @return A new normalized TimeSeries, or an error if the series is empty.
+ */
 func MinMaxNormalize(ts timeseriesgo.TimeSeries) (timeseriesgo.TimeSeries, error) {
 	if ts.IsEmpty() {
 		return timeseriesgo.Empty(), errors.New("TimeSeries is empty")
@@ -190,4 +207,3 @@ func MinMaxNormalize(ts timeseriesgo.TimeSeries) (timeseriesgo.TimeSeries, error
 
 	return result, nil
 }
-

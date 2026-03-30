@@ -36,6 +36,13 @@ func ZScore(ts timeseriesgo.TimeSeries) (timeseriesgo.TimeSeries, error) {
 	return zscored, nil
 }
 
+/**
+ * Finds anomalies in the TimeSeries using Z-Score thresholding.
+ *
+ * @param ts The TimeSeries to be analyzed.
+ *
+ * @return A new TimeSeries with 1 for anomalous points and 0 for normal points, or an error if the calculation fails.
+ */
 func FindAnomaliesWithZScore(ts timeseriesgo.TimeSeries) (timeseriesgo.TimeSeries, error) {
 	rs, err := ZScore(ts)
 	if err != nil {
@@ -51,6 +58,13 @@ func FindAnomaliesWithZScore(ts timeseriesgo.TimeSeries) (timeseriesgo.TimeSerie
 	}
 }
 
+/**
+ * Calculates the Robust Z-Score normalization of the TimeSeries.
+ *
+ * @param ts The TimeSeries to be normalized.
+ *
+ * @return A new TimeSeries with robust Z-Score normalized values, or an error if the calculation fails.
+ */
 func RobustZScore(ts timeseriesgo.TimeSeries) (timeseriesgo.TimeSeries, error) {
 	if ts.IsEmpty() {
 		return timeseriesgo.Empty(), errors.New("timeseries is empty")
@@ -73,6 +87,13 @@ func RobustZScore(ts timeseriesgo.TimeSeries) (timeseriesgo.TimeSeries, error) {
 	}
 }
 
+/**
+ * Finds anomalies in the TimeSeries using Robust Z-Score thresholding.
+ *
+ * @param ts The TimeSeries to be analyzed.
+ *
+ * @return A new TimeSeries with 1 for anomalous points and 0 for normal points, or an error if the calculation fails.
+ */
 func FindAnomaliesWithRobustZScore(ts timeseriesgo.TimeSeries) (timeseriesgo.TimeSeries, error) {
 	rs, err := RobustZScore(ts)
 	if err != nil {
@@ -88,7 +109,14 @@ func FindAnomaliesWithRobustZScore(ts timeseriesgo.TimeSeries) (timeseriesgo.Tim
 	}
 }
 
-// FindSpikeAnomalies flags positive jumps greater than or equal to the given threshold.
+/**
+ * Finds spike anomalies in the TimeSeries based on a positive jump threshold.
+ *
+ * @param ts The TimeSeries to be analyzed.
+ * @param threshold The minimum positive jump required to mark a spike anomaly.
+ *
+ * @return A new TimeSeries with 1 for spike anomalies and 0 for normal points, or an error if the input is invalid.
+ */
 func FindSpikeAnomalies(ts timeseriesgo.TimeSeries, threshold float64) (timeseriesgo.TimeSeries, error) {
 	if ts.IsEmpty() {
 		return timeseriesgo.Empty(), errors.New("timeseries is empty")
@@ -117,7 +145,14 @@ func FindSpikeAnomalies(ts timeseriesgo.TimeSeries, threshold float64) (timeseri
 	return res, nil
 }
 
-// FindDropAnomalies flags negative jumps (drops) greater than or equal to the given threshold.
+/**
+ * Finds drop anomalies in the TimeSeries based on a negative jump threshold.
+ *
+ * @param ts The TimeSeries to be analyzed.
+ * @param threshold The minimum drop magnitude required to mark a drop anomaly.
+ *
+ * @return A new TimeSeries with 1 for drop anomalies and 0 for normal points, or an error if the input is invalid.
+ */
 func FindDropAnomalies(ts timeseriesgo.TimeSeries, threshold float64) (timeseriesgo.TimeSeries, error) {
 	if ts.IsEmpty() {
 		return timeseriesgo.Empty(), errors.New("timeseries is empty")
@@ -145,7 +180,15 @@ func FindDropAnomalies(ts timeseriesgo.TimeSeries, threshold float64) (timeserie
 	return res, nil
 }
 
-// FindFlatlineAnomalies flags runs of near-constant values.
+/**
+ * Finds flatline anomalies in the TimeSeries based on tolerance and minimum run length.
+ *
+ * @param ts The TimeSeries to be analyzed.
+ * @param tolerance The maximum allowed difference between adjacent values in a flatline.
+ * @param minLength The minimum number of consecutive points required to mark a flatline.
+ *
+ * @return A new TimeSeries with 1 for flatline anomalies and 0 for normal points, or an error if the input is invalid.
+ */
 func FindFlatlineAnomalies(ts timeseriesgo.TimeSeries, tolerance float64, minLength int) (timeseriesgo.TimeSeries, error) {
 	if ts.IsEmpty() {
 		return timeseriesgo.Empty(), errors.New("timeseries is empty")

@@ -17,31 +17,61 @@ type TimeSeries struct {
 	label      string
 }
 
+/**
+ * Creates an empty TimeSeries with a default label.
+ *
+ * @return A new empty TimeSeries.
+ */
 func Empty() TimeSeries {
 	return TimeSeries{datapoints: []DataPoint{}, label: "new series"}
 }
 
+/**
+ * Creates an empty TimeSeries with the provided label.
+ *
+ * @param label The label to assign to the created TimeSeries.
+ *
+ * @return A new empty TimeSeries with the provided label.
+ */
 func EmptyLabeled(label string) TimeSeries {
 	return TimeSeries{datapoints: []DataPoint{}, label: label}
 }
 
-// FromDataPoints builds a TimeSeries from a slice of datapoints (copied).
+/**
+ * Builds a TimeSeries from a slice of datapoints.
+ *
+ * @param points The datapoints to copy into the new TimeSeries.
+ *
+ * @return A new TimeSeries containing a copy of the provided datapoints.
+ */
 func FromDataPoints(points []DataPoint) TimeSeries {
 	cp := make([]DataPoint, len(points))
 	copy(cp, points)
 	return TimeSeries{datapoints: cp}
 }
 
+/**
+ * Checks whether the TimeSeries is empty.
+ *
+ * @return True if the series contains no datapoints, otherwise false.
+ */
 func (ts *TimeSeries) IsEmpty() bool {
 	return len(ts.datapoints) == 0
 }
 
+/**
+ * Returns the number of datapoints in the TimeSeries.
+ *
+ * @return The number of datapoints in the series.
+ */
 func (ts *TimeSeries) Length() int {
 	return len(ts.datapoints)
 }
 
 /**
  * Returns the values of all points.
+ *
+ * @return A slice of float64 values in series order.
  */
 func (ts *TimeSeries) Values() []float64 {
 	var res []float64
@@ -53,6 +83,8 @@ func (ts *TimeSeries) Values() []float64 {
 
 /**
  * Returns all timestamps.
+ *
+ * @return A slice of timestamps in series order.
  */
 func (ts *TimeSeries) Timestamps() []time.Time {
 	var res []time.Time
@@ -62,7 +94,11 @@ func (ts *TimeSeries) Timestamps() []time.Time {
 	return res
 }
 
-// DataPoints returns a shallow copy of underlying datapoints to allow safe read access.
+/**
+ * Returns the datapoints of the TimeSeries.
+ *
+ * @return A shallow copy of the underlying DataPoint slice for safe read-only access.
+ */
 func (ts *TimeSeries) DataPoints() []DataPoint {
 	cp := make([]DataPoint, len(ts.datapoints))
 	copy(cp, ts.datapoints)
@@ -71,6 +107,8 @@ func (ts *TimeSeries) DataPoints() []DataPoint {
 
 /**
  * Returns the last point in the series.
+ *
+ * @return The last DataPoint in the series, or an error if the series is empty.
  */
 func (ts *TimeSeries) Last() (DataPoint, error) {
 	if ts.IsEmpty() {
@@ -81,6 +119,8 @@ func (ts *TimeSeries) Last() (DataPoint, error) {
 
 /**
  * Returns the first point in the series.
+ *
+ * @return The first DataPoint in the series, or an error if the series is empty.
  */
 func (ts *TimeSeries) Head() (DataPoint, error) {
 	if ts.IsEmpty() {
@@ -91,6 +131,8 @@ func (ts *TimeSeries) Head() (DataPoint, error) {
 
 /**
  * Returns the series without the first point.
+ *
+ * @return A new TimeSeries without the first datapoint.
  */
 func (ts *TimeSeries) Tail() TimeSeries {
 	if ts.IsEmpty() {
@@ -103,6 +145,8 @@ func (ts *TimeSeries) Tail() TimeSeries {
 
 /**
  * Most frequent interval between consecutive points.
+ *
+ * @return The most common time interval between consecutive datapoints, or an error if it cannot be determined.
  */
 func (ts *TimeSeries) Resolution() (time.Duration, error) {
 	if ts.IsEmpty() {
@@ -141,6 +185,8 @@ func (ts *TimeSeries) AddPoint(dp DataPoint) {
 
 /**
  * Prints the TimeSeries in a human-readable format.
+ *
+ * @return None. The function writes the series to standard output.
  */
 func (ts *TimeSeries) Print() {
 	fmt.Println("Timestamp, Value")
@@ -167,6 +213,14 @@ func (ts TimeSeries) Slice(start time.Time, end time.Time) TimeSeries {
 	return sliced
 }
 
+/**
+ * Combines timestamps and values into a TimeSeries.
+ *
+ * @param timestamps A slice of timestamps for the resulting datapoints.
+ * @param values A slice of values for the resulting datapoints.
+ *
+ * @return A new TimeSeries built from the provided timestamps and values, or an error if the slice lengths differ.
+ */
 func Zip(timestamps []time.Time, values []float64) (TimeSeries, error) {
 	if len(timestamps) != len(values) {
 		return TimeSeries{}, errors.New("timestamps and values slices must have the same length")
@@ -184,6 +238,8 @@ func Zip(timestamps []time.Time, values []float64) (TimeSeries, error) {
 
 /**
  * Splits the series into separate slices of timestamps and values.
+ *
+ * @return A slice of timestamps and a slice of values extracted from the series.
  */
 func (ts *TimeSeries) UnZip() ([]time.Time, []float64) {
 	timestamps := make([]time.Time, len(ts.datapoints))
@@ -215,6 +271,10 @@ func (ts *TimeSeries) MapValues(f func(float64) float64) TimeSeries {
 
 /**
  * Maps over the full DataPoint.
+ *
+ * @param f A function that takes a DataPoint and returns a transformed DataPoint.
+ *
+ * @return A new TimeSeries with the function applied to each DataPoint.
  */
 func (ts *TimeSeries) Map(f func(DataPoint) DataPoint) TimeSeries {
 	mapped := Empty()
@@ -397,6 +457,14 @@ func (ts *TimeSeries) GroupByTime(g func(dt time.Time) time.Time, f func(dp []Da
 	}
 }
 
+/**
+ * Applies a rolling window aggregation over the TimeSeries.
+ *
+ * @param window The trailing time window used for each aggregation.
+ * @param f A function that takes the values in the window and returns an aggregated float64.
+ *
+ * @return A new TimeSeries containing one aggregated value per original datapoint.
+ */
 func (ts TimeSeries) RollingWindow(window time.Duration, f func(vs []float64) float64) TimeSeries {
 	return ts.Map(func(dp DataPoint) DataPoint {
 		ws := ts.Filter(func(dp2 DataPoint) bool {
@@ -514,6 +582,12 @@ func (ts *TimeSeries) JoinLeft(otherTS TimeSeries, defaultValue float64) Aligned
 
 /**
  * Joins (outer) two TimeSeries on their timestamps, filling missing values with defaults.
+ *
+ * @param otherTS The other TimeSeries to join with.
+ * @param defaultLeftValue The default value to use for missing left-side datapoints.
+ * @param defaultRightValue The default value to use for missing right-side datapoints.
+ *
+ * @return An AlignedSeries containing datapoints from both TimeSeries, using default values for missing matches.
  */
 func (ts *TimeSeries) JoinOuter(otherTS TimeSeries, defaultLeftValue float64, defaultRightValue float64) AlignedSeries {
 	if ts.IsEmpty() && otherTS.IsEmpty() {
@@ -560,10 +634,6 @@ func (ts *TimeSeries) JoinOuter(otherTS TimeSeries, defaultLeftValue float64, de
 		return res
 	}
 }
-
-/**
-* Statistics
- */
 
 /**
  * Finds the minimum value in the TimeSeries.
@@ -617,6 +687,13 @@ func (ts *TimeSeries) Max() (DataPoint, error) {
 	return maxDP, nil
 }
 
+/**
+ * Calculates the percentile value of the TimeSeries.
+ *
+ * @param p The percentile to calculate, expressed as an integer from 0 to 100.
+ *
+ * @return The percentile value, or an error if the series is empty.
+ */
 func (ts *TimeSeries) Percentile(p int) (float64, error) {
 	if ts.IsEmpty() {
 		return 0.0, errors.New("timeseries is empty")
@@ -639,8 +716,9 @@ func (ts *TimeSeries) Percentile(p int) (float64, error) {
 }
 
 /**
-* Return new series with difference between 2 points
-*
+ * Returns a new TimeSeries containing differences between consecutive points.
+ *
+ * @return A new TimeSeries with one datapoint per consecutive difference.
  */
 func (ts *TimeSeries) Differentiate() TimeSeries {
 	result := Empty()
@@ -662,8 +740,9 @@ func (ts *TimeSeries) Differentiate() TimeSeries {
 }
 
 /**
-* Return new series with sum between 2 points
-*
+ * Returns a new TimeSeries containing pairwise sums of consecutive points.
+ *
+ * @return A new TimeSeries with one datapoint per pairwise sum.
  */
 func (ts *TimeSeries) Integrate() TimeSeries {
 	result := Empty()
@@ -685,6 +764,11 @@ func (ts *TimeSeries) Integrate() TimeSeries {
 
 }
 
+/**
+ * Calculates the median value of the TimeSeries.
+ *
+ * @return The median value, or an error if the series is empty.
+ */
 func (ts *TimeSeries) Median() (float64, error) {
 	return ts.Percentile(50)
 }
