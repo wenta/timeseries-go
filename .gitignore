@@ -17,6 +17,11 @@ coverage.*
 *.coverprofile
 profile.cov
 
+# Generated chart artifacts
+*.html
+*.png
+*.svg
+
 # Dependency directories (remove the comment below to include it)
 # vendor/
 

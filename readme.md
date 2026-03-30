@@ -6,6 +6,17 @@ Package docs: https://pkg.go.dev/github.com/wenta/timeseries-go
 
 Planned work: see [todo.md](todo.md).
 
+## Example programs
+
+```bash
+go run ./examples
+go run ./examples/plotting
+go run ./examples/forecasting
+go run ./examples/anomalies
+go run ./examples/transformations
+go run ./examples/generators
+```
+
 
 ## Common setup
 
@@ -166,6 +177,23 @@ fc := forecast.Naive(ts, 3)
 ses := forecast.SimpleExponentialSmoothing(ts, 0.2, 3)
 holt := forecast.DoubleExponentialSmoothing(ts, 0.8, 0.2, 3)
 holtEstimated := forecast.DoubleExponentialSmoothingEstimated(ts, 0.8, 0.2, 3)
+```
+
+#### Plotting (plot)
+Generate browser-friendly HTML charts or static SVG/PNG files.
+```go
+comparison := []plot.Series{
+	{Label: "actual", Data: ts, Color: plot.Gold},
+	{Label: "forecast", Data: forecastTS, Color: plot.DeepSkyBlue, Style: plot.LinePoints},
+}
+
+_ = plot.Save("out/actual-vs-forecast.html", comparison, plot.Title("Actual vs Forecast"))
+_ = plot.SaveSVG("out/actual-vs-forecast.svg", comparison, plot.Title("Actual vs Forecast"))
+_ = plot.SavePNG("out/actual-vs-forecast.png", comparison, plot.Title("Actual vs Forecast"))
+
+htmlBytes, _ := plot.HTML(comparison, plot.Title("Actual vs Forecast"))
+svgBytes, _ := plot.SVG(comparison, plot.Title("Actual vs Forecast"))
+pngBytes, _ := plot.PNG(comparison, plot.Title("Actual vs Forecast"))
 ```
 
 #### Generators (generator)

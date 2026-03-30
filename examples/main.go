@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"log"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -11,35 +12,47 @@ import (
 	"github.com/wenta/timeseries-go/anomaly"
 	"github.com/wenta/timeseries-go/forecast"
 	"github.com/wenta/timeseries-go/generator"
+	"github.com/wenta/timeseries-go/internal/exampledata"
+	"github.com/wenta/timeseries-go/internal/exampleutil"
 	"github.com/wenta/timeseries-go/metrics"
+	"github.com/wenta/timeseries-go/plot"
 	"github.com/wenta/timeseries-go/stats"
 	"github.com/wenta/timeseries-go/tsio"
 )
 
 func main() {
-	base := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
-	index := generator.MakeSeriesIndex(base, 30*time.Minute, 10)
+	outDir, err := exampleutil.OutputDir("main")
+	if err != nil {
+		log.Fatalf("output dir creation failed: %v", err)
+	}
 
-	// 1) Generate a simple series and compute moving average.
-	series := generator.RandomWalk(index, 10)
-	series.AddPoint(timeseriesgo.DataPoint{Timestamp: base.Add(5 * time.Hour), Value: 30})
-	fmt.Println("Original series values:", series.Values())
-	noise := generator.RandomNoise(index, 0, 1)
-	fmt.Println("Random noise values:", noise.Values())
+	series, err := exampledata.AirPassengers()
+	if err != nil {
+		log.Fatalf("air passengers series creation failed: %v", err)
+	}
 
-	ma := stats.MovingAverage(series, time.Hour)
-	fmt.Println("Hourly moving average:", ma.Values())
+	fmt.Printf("AirPassengers length: %d\n", series.Length())
+	fmt.Println("AirPassengers first 12 values:", previewValues(series.Values(), 12))
 
-	// 2) Naive forecast for 3 future points.
-	fc := forecast.Naive(series, 3)
-	fmt.Println("Naive forecast values:", fc.Values())
+	ma := stats.MovingAverage(series, 365*24*time.Hour)
+	fc := forecast.Naive(series, 12)
+	ses := forecast.SimpleExponentialSmoothing(series, 0.2, 12)
 
-	// 3) Simple exponential smoothing forecast.
-	ses := forecast.SimpleExponentialSmoothing(series, 0.2, 3)
-	fmt.Println("SES forecast values:", ses.Values())
+	saveChart(outDir, "air_passengers", "AirPassengers", []plot.Series{
+		{Label: "air", Data: series, Color: plot.Gold},
+	})
+	saveChart(outDir, "moving_average", "AirPassengers vs Moving Average", []plot.Series{
+		{Label: "air", Data: series, Color: plot.Gold},
+		{Label: "moving average", Data: ma, Color: plot.LightSeaGreen, Style: plot.Points},
+	})
+	saveChart(outDir, "forecast_comparison", "Naive vs SES Forecast", []plot.Series{
+		{Label: "air", Data: series, Color: plot.Gold},
+		{Label: "naive", Data: fc, Color: plot.DarkOrange, Style: plot.LinePoints},
+		{Label: "ses", Data: ses, Color: plot.DeepSkyBlue, Style: plot.LinePoints},
+	}, plot.TimeFormat("2006"))
 
-	// 4) Holt linear trend forecast on a series with a clear trend.
-	trendIndex := generator.MakeSeriesIndex(base, 30*time.Minute, 6)
+	exampleBase := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	trendIndex := generator.MakeSeriesIndex(exampleBase, 30*time.Minute, 6)
 	trendValues := []float64{10, 12, 13, 16, 18, 21}
 	trendSeries, err := timeseriesgo.Zip(trendIndex, trendValues)
 	if err != nil {
@@ -47,48 +60,78 @@ func main() {
 	}
 	holt := forecast.DoubleExponentialSmoothing(trendSeries, 0.8, 0.2, 3)
 	holtEstimated := forecast.DoubleExponentialSmoothingEstimated(trendSeries, 0.8, 0.2, 3)
-	fmt.Println("Holt forecast values:", holt.Values())
-	fmt.Println("Holt estimated-init forecast values:", holtEstimated.Values())
+	saveChart(outDir, "holt_comparison", "Holt vs Holt Estimated", []plot.Series{
+		{Label: "trend", Data: trendSeries, Color: plot.Gold},
+		{Label: "holt", Data: holt, Color: plot.Cyan, Style: plot.LinePoints},
+		{Label: "holt estimated", Data: holtEstimated, Color: plot.Chartreuse, Style: plot.LinePoints},
+	})
 
-	// 5) Z-Score anomalies on the original series.
 	flags, err := anomaly.FindAnomaliesWithZScore(series)
 	if err != nil {
 		log.Fatalf("zscore failed: %v", err)
 	}
-	fmt.Println("Z-Score anomaly flags:", flags.Values())
+	saveChart(outDir, "zscore_anomalies", "Z-Score Anomalies", []plot.Series{
+		{Label: "air", Data: series, Color: plot.Gold},
+		{Label: "anomalies", Data: exampleutil.FlaggedPoints(series, flags), Color: plot.Crimson, Style: plot.Points},
+	})
 
-	// 6) Serialize to CSV and back.
 	csvStr, err := tsio.ToString(series)
 	if err != nil {
 		log.Fatalf("serialize failed: %v", err)
 	}
-	fmt.Println("\nCSV output:\n", csvStr)
+	fmt.Println("CSV preview:\n" + previewLines(csvStr, 6))
 
 	reloaded, err := tsio.FromString(*csv.NewReader(strings.NewReader(csvStr)), "example")
 	if err != nil {
 		log.Fatalf("parse failed: %v", err)
 	}
-	fmt.Printf("Reloaded length: %d\n", reloaded.Length())
+	saveChart(outDir, "reloaded", "Original vs Reloaded", []plot.Series{
+		{Label: "original", Data: series, Color: plot.Gold},
+		{Label: "reloaded", Data: reloaded, Color: plot.Orchid},
+	})
 
-	// 7) Compare two series: MSE/RMSE/MAE.
-	index2 := generator.MakeSeriesIndex(base, 30*time.Minute, 10)
-	series2 := generator.Constant(index2, 9)
+	series2 := generator.Constant(series.Timestamps(), 300)
 	mse, _ := metrics.MSE(series, series2)
 	rmse, _ := metrics.RMSE(series, series2)
 	mae, _ := metrics.MAE(series, series2)
 	fmt.Printf("MSE=%.2f RMSE=%.2f MAE=%.2f\n", mse, rmse, mae)
+	saveChart(outDir, "constant_baseline", "AirPassengers vs Constant Baseline", []plot.Series{
+		{Label: "air", Data: series, Color: plot.Gold},
+		{Label: "baseline", Data: series2, Color: plot.MediumPurple},
+	})
 
-	// 8) Detect spikes in a random walk.
-	walk := generator.RandomWalk(index, 0)
+	walk := generator.RandomWalk(generator.MakeSeriesIndex(exampleBase, 30*time.Minute, 24), 0)
 	spikeFlags, err := anomaly.FindSpikeAnomalies(walk, 3)
 	if err != nil {
 		log.Fatalf("spike detection failed: %v", err)
 	}
-	fmt.Println("Random walk spike flags:", spikeFlags.Values())
+	saveChart(outDir, "spike_anomalies", "Random Walk with Spike Markers", []plot.Series{
+		{Label: "walk", Data: walk, Color: plot.MediumPurple},
+		{Label: "spikes", Data: exampleutil.FlaggedPoints(walk, spikeFlags), Color: plot.Crimson, Style: plot.Points},
+	})
 
-	// 9) Merge forecast with original and compute MAD on spike flags.
-	merged := series.Merge(fc)
-	fmt.Println("Merged series length:", merged.Length())
 	mad, _ := metrics.MAD(spikeFlags)
 	fmt.Printf("MAD of spike flags: %.2f\n", mad)
+	exampleutil.PrintOutputDir(outDir)
+}
+
+func saveChart(outDir string, slug string, title string, series []plot.Series, opts ...plot.Option) {
+	if err := exampleutil.SaveAllFormats(filepath.Join(outDir, slug), series, append([]plot.Option{plot.Title(title)}, opts...)...); err != nil {
+		log.Fatalf("%s plot failed: %v", slug, err)
+	}
+}
+
+func previewValues(values []float64, limit int) []float64 {
+	if len(values) <= limit {
+		return values
+	}
+	return values[:limit]
+}
+
+func previewLines(text string, limit int) string {
+	lines := strings.Split(strings.TrimSpace(text), "\n")
+	if len(lines) <= limit {
+		return strings.Join(lines, "\n")
+	}
+	return strings.Join(lines[:limit], "\n") + "\n..."
 }
