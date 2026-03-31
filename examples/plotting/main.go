@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/wenta/timeseries-go/forecast"
-	"github.com/wenta/timeseries-go/internal/exampledata"
 	"github.com/wenta/timeseries-go/internal/exampleutil"
 	"github.com/wenta/timeseries-go/plot"
 	"github.com/wenta/timeseries-go/stats"
@@ -18,9 +17,9 @@ func main() {
 		log.Fatalf("output dir creation failed: %v", err)
 	}
 
-	air, err := exampledata.AirPassengers()
+	air, err := exampleutil.LoadCSVSeries("examples/data/air_passengers.csv", "2006-01-02", "air-passengers")
 	if err != nil {
-		log.Fatalf("air passengers series creation failed: %v", err)
+		log.Fatalf("air passengers csv load failed: %v", err)
 	}
 
 	yearlyMA := stats.MovingAverage(air, 365*24*time.Hour)

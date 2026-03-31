@@ -13,9 +13,12 @@ go run ./examples
 go run ./examples/plotting
 go run ./examples/forecasting
 go run ./examples/anomalies
+go run ./examples/decomposition
 go run ./examples/transformations
 go run ./examples/generators
 ```
+
+Shared example dataset: [examples/data/air_passengers.csv](examples/data/air_passengers.csv)
 
 
 ## Common setup
@@ -30,6 +33,7 @@ import (
 
 	timeseriesgo "github.com/wenta/timeseries-go"
 	"github.com/wenta/timeseries-go/anomaly"
+	"github.com/wenta/timeseries-go/decompose"
 	"github.com/wenta/timeseries-go/forecast"
 	"github.com/wenta/timeseries-go/generator"
 	"github.com/wenta/timeseries-go/metrics"
@@ -157,6 +161,24 @@ diffSeries := ts.Differentiate()
 integ := ts.Integrate()
 mv, _ := stats.GetMeanAndVariance(ts)
 ```
+
+#### Decomposition (decompose)
+Additive seasonal decomposition and STL (Season-Trend decomposition using LOESS).
+```go
+result, _ := decompose.SeasonalDecompose(ts, 12)
+stl, _ := decompose.STL(ts, decompose.STLConfig{Period: 12, Robust: true})
+
+trend := result.Trend
+seasonal := result.Seasonal
+residual := result.Residual
+
+stlTrend := stl.Trend
+stlSeasonal := stl.Seasonal
+stlResidual := stl.Residual
+```
+
+`SeasonalDecompose` implements the classical additive decomposition approach based on centered moving averages.
+`STL` follows the method introduced by Cleveland, Cleveland, McRae, and Terpenning, "STL: A Seasonal-Trend Decomposition Procedure Based on Loess" (1990).
 
 #### Metrics (metrics)
 Compare series.

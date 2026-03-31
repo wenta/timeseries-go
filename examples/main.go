@@ -12,7 +12,6 @@ import (
 	"github.com/wenta/timeseries-go/anomaly"
 	"github.com/wenta/timeseries-go/forecast"
 	"github.com/wenta/timeseries-go/generator"
-	"github.com/wenta/timeseries-go/internal/exampledata"
 	"github.com/wenta/timeseries-go/internal/exampleutil"
 	"github.com/wenta/timeseries-go/metrics"
 	"github.com/wenta/timeseries-go/plot"
@@ -26,9 +25,9 @@ func main() {
 		log.Fatalf("output dir creation failed: %v", err)
 	}
 
-	series, err := exampledata.AirPassengers()
+	series, err := exampleutil.LoadCSVSeries("examples/data/air_passengers.csv", "2006-01-02", "air-passengers")
 	if err != nil {
-		log.Fatalf("air passengers series creation failed: %v", err)
+		log.Fatalf("air passengers csv load failed: %v", err)
 	}
 
 	fmt.Printf("AirPassengers length: %d\n", series.Length())
