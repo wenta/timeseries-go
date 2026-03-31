@@ -131,6 +131,53 @@ func DoubleExponentialSmoothingEstimated(ts timeseriesgo.TimeSeries, alpha float
 	return doubleExponentialSmoothingWithInitialization(points, alpha, beta, forecastHorizon, level, trend, 0)
 }
 
+/**
+ * Implements Holt-Winters additive seasonal forecasting (triple exponential smoothing).
+ *
+ * @param ts The TimeSeries to forecast. Expected that ts is already sorted by timestamp.
+ * @param alpha The level smoothing factor (0 <= alpha <= 1).
+ * @param beta The trend smoothing factor (0 <= beta <= 1).
+ * @param gamma The seasonal smoothing factor (0 <= gamma <= 1).
+ * @param seasonLength The number of points in a full seasonal cycle.
+ * @param forecastHorizon The number of future points to forecast.
+ * @return A TimeSeries containing the forecasted points. Please use ts.Merge(forecast) to combine with the original series.
+ */
+func TripleExponentialSmoothing(ts timeseriesgo.TimeSeries, alpha float64, beta float64, gamma float64, seasonLength int, forecastHorizon int) timeseriesgo.TimeSeries {
+	if ts.IsEmpty() || forecastHorizon <= 0 || seasonLength <= 0 || alpha < 0 || alpha > 1 || beta < 0 || beta > 1 || gamma < 0 || gamma > 1 {
+		return timeseriesgo.Empty()
+	}
+
+	points := ts.DataPoints()
+	if len(points) < 2*seasonLength || len(points) < 2 {
+		return timeseriesgo.Empty()
+	}
+
+	level, trend, seasonals := estimateAdditiveSeasonalInitialization(points, seasonLength)
+
+	for i := seasonLength; i < len(points); i++ {
+		seasonal := seasonals[i%seasonLength]
+		prevLevel := level
+
+		level = alpha*(points[i].Value-seasonal) + (1-alpha)*(level+trend)
+		trend = beta*(level-prevLevel) + (1-beta)*trend
+		seasonals[i%seasonLength] = gamma*(points[i].Value-level) + (1-gamma)*seasonal
+	}
+
+	forecastSeries := timeseriesgo.Empty()
+	lastPoint := points[len(points)-1]
+	interval := points[1].Timestamp.Sub(points[0].Timestamp)
+	for i := 1; i <= forecastHorizon; i++ {
+		seasonal := seasonals[(len(points)+i-1)%seasonLength]
+		forecastTime := lastPoint.Timestamp.Add(time.Duration(i) * interval)
+		forecastSeries.AddPoint(timeseriesgo.DataPoint{
+			Timestamp: forecastTime,
+			Value:     level + float64(i)*trend + seasonal,
+		})
+	}
+
+	return forecastSeries
+}
+
 func doubleExponentialSmoothingWithInitialization(points []timeseriesgo.DataPoint, alpha float64, beta float64, forecastHorizon int, level float64, trend float64, startIndex int) timeseriesgo.TimeSeries {
 	for _, point := range points[startIndex:] {
 		prevLevel := level
@@ -180,4 +227,28 @@ func estimateHoltInitialLevelTrend(points []timeseriesgo.DataPoint) (float64, fl
 	trend := (n*sumXY - sumX*sumY) / denominator
 	level := (sumY - trend*sumX) / n
 	return level, trend
+}
+
+func estimateAdditiveSeasonalInitialization(points []timeseriesgo.DataPoint, seasonLength int) (float64, float64, []float64) {
+	firstSeasonAverage := mean(points[:seasonLength])
+	secondSeasonAverage := mean(points[seasonLength : 2*seasonLength])
+
+	seasonals := make([]float64, seasonLength)
+	for i := 0; i < seasonLength; i++ {
+		firstSeasonDeviation := points[i].Value - firstSeasonAverage
+		secondSeasonDeviation := points[i+seasonLength].Value - secondSeasonAverage
+		seasonals[i] = (firstSeasonDeviation + secondSeasonDeviation) / 2
+	}
+
+	level := firstSeasonAverage
+	trend := (secondSeasonAverage - firstSeasonAverage) / float64(seasonLength)
+	return level, trend, seasonals
+}
+
+func mean(points []timeseriesgo.DataPoint) float64 {
+	sum := 0.0
+	for _, point := range points {
+		sum += point.Value
+	}
+	return sum / float64(len(points))
 }

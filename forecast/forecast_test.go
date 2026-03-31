@@ -368,3 +368,94 @@ func TestDoubleExponentialSmoothingEstimatedLiteratureAirData(t *testing.T) {
 		}
 	}
 }
+
+func TestTripleExponentialSmoothingHandCalculated(t *testing.T) {
+	start := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	interval := time.Hour
+	values := []float64{
+		3, 7,
+		5, 9,
+		7, 11,
+	}
+	index := generator.MakeSeriesIndex(start, interval, len(values))
+
+	ts, err := timeseriesgo.Zip(index, values)
+	if err != nil {
+		t.Fatalf("Unexpected error creating time series: %v", err)
+	}
+
+	forecastHorizon := 2
+	forecast := TripleExponentialSmoothing(ts, 0.5, 0.5, 0.5, 2, forecastHorizon)
+
+	if forecast.Length() != forecastHorizon {
+		t.Fatalf("Expected forecast length %d, got %d", forecastHorizon, forecast.Length())
+	}
+
+	expectedValues := []float64{8.79296875, 13.14453125}
+	lastPoint, err := ts.Last()
+	if err != nil {
+		t.Fatalf("Unexpected error getting last point: %v", err)
+	}
+
+	for i, dp := range forecast.DataPoints() {
+		expectedTime := lastPoint.Timestamp.Add(time.Duration(i+1) * interval)
+		if !dp.Timestamp.Equal(expectedTime) {
+			t.Errorf("At index %d: expected timestamp %v, got %v", i, expectedTime, dp.Timestamp)
+		}
+		if math.Abs(dp.Value-expectedValues[i]) > 1e-9 {
+			t.Errorf("At index %d: expected value %f, got %f", i, expectedValues[i], dp.Value)
+		}
+	}
+}
+
+func TestTripleExponentialSmoothingPureSeasonality(t *testing.T) {
+	start := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	interval := time.Hour
+	values := []float64{
+		10, 20, 30, 40,
+		10, 20, 30, 40,
+		10, 20, 30, 40,
+	}
+	index := generator.MakeSeriesIndex(start, interval, len(values))
+
+	ts, err := timeseriesgo.Zip(index, values)
+	if err != nil {
+		t.Fatalf("Unexpected error creating time series: %v", err)
+	}
+
+	forecast := TripleExponentialSmoothing(ts, 1.0, 1.0, 1.0, 4, 4)
+	expectedValues := []float64{10, 20, 30, 40}
+
+	for i, dp := range forecast.DataPoints() {
+		if math.Abs(dp.Value-expectedValues[i]) > 1e-9 {
+			t.Errorf("At index %d: expected value %f, got %f", i, expectedValues[i], dp.Value)
+		}
+	}
+}
+
+func TestTripleExponentialSmoothingInvalidInputReturnsEmpty(t *testing.T) {
+	start := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	index := generator.MakeSeriesIndex(start, time.Hour, 6)
+	values := []float64{1, 2, 3, 4, 5, 6}
+
+	ts, err := timeseriesgo.Zip(index, values)
+	if err != nil {
+		t.Fatalf("Unexpected error creating time series: %v", err)
+	}
+
+	cases := []timeseriesgo.TimeSeries{
+		TripleExponentialSmoothing(timeseriesgo.Empty(), 0.5, 0.3, 0.2, 3, 2),
+		TripleExponentialSmoothing(ts, -0.1, 0.3, 0.2, 3, 2),
+		TripleExponentialSmoothing(ts, 0.5, 1.1, 0.2, 3, 2),
+		TripleExponentialSmoothing(ts, 0.5, 0.3, 1.2, 3, 2),
+		TripleExponentialSmoothing(ts, 0.5, 0.3, 0.2, 0, 2),
+		TripleExponentialSmoothing(ts, 0.5, 0.3, 0.2, 4, 2),
+		TripleExponentialSmoothing(ts, 0.5, 0.3, 0.2, 3, 0),
+	}
+
+	for i, result := range cases {
+		if !result.IsEmpty() {
+			t.Errorf("Case %d: expected empty forecast, got length %d", i, result.Length())
+		}
+	}
+}
