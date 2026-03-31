@@ -4,8 +4,11 @@ import (
 	"log"
 	"math"
 	"path/filepath"
+	"time"
 
+	timeseriesgo "github.com/wenta/timeseries-go"
 	"github.com/wenta/timeseries-go/decompose"
+	"github.com/wenta/timeseries-go/generator"
 	"github.com/wenta/timeseries-go/internal/exampleutil"
 	"github.com/wenta/timeseries-go/plot"
 )
@@ -48,6 +51,46 @@ func main() {
 	})
 	mustSave(outDir, "stl_residual", "STL Residual Component", []plot.Series{
 		{Label: "residual", Data: stlResult.Residual, Color: plot.Crimson, Style: plot.LinePoints},
+	})
+
+	hourlyBase := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	hourlyLength := 24 * 21
+	hourlyIndex := generator.MakeSeriesIndex(hourlyBase, time.Hour, hourlyLength)
+	hourlyValues := make([]float64, hourlyLength)
+	for i := range hourlyValues {
+		daily := 5 * math.Sin(2*math.Pi*float64(i%24)/24)
+		weekly := []float64{-4, -2, 0, 1, 3, 5, -3}[(i/24)%7]
+		trend := 50.0 + 0.05*float64(i)
+		hourlyValues[i] = trend + daily + weekly
+	}
+
+	hourlySeries, err := timeseriesgo.Zip(hourlyIndex, hourlyValues)
+	if err != nil {
+		log.Fatalf("hourly multiseasonal series creation failed: %v", err)
+	}
+
+	mstlResult, err := decompose.MSTL(hourlySeries, decompose.MSTLConfig{
+		Periods:         []int{24, 24 * 7},
+		SeasonalWindows: []int{9, 15},
+		Iterations:      2,
+		InnerIterations: 2,
+	})
+	if err != nil {
+		log.Fatalf("mstl decomposition failed: %v", err)
+	}
+
+	mustSave(outDir, "mstl_trend", "MSTL Trend", []plot.Series{
+		{Label: "observed", Data: hourlySeries, Color: plot.Gold},
+		{Label: "trend", Data: mstlResult.Trend, Color: plot.DeepSkyBlue, Style: plot.LinePoints},
+	})
+	mustSave(outDir, "mstl_daily", "MSTL Daily Seasonal Component", []plot.Series{
+		{Label: "daily", Data: mstlResult.Seasonal[0].Series, Color: plot.LightSeaGreen, Style: plot.LinePoints},
+	})
+	mustSave(outDir, "mstl_weekly", "MSTL Weekly Seasonal Component", []plot.Series{
+		{Label: "weekly", Data: mstlResult.Seasonal[1].Series, Color: plot.Orchid, Style: plot.LinePoints},
+	})
+	mustSave(outDir, "mstl_residual", "MSTL Residual", []plot.Series{
+		{Label: "residual", Data: mstlResult.Residual, Color: plot.Crimson, Style: plot.LinePoints},
 	})
 
 	exampleutil.PrintOutputDir(outDir)

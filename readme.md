@@ -163,10 +163,11 @@ mv, _ := stats.GetMeanAndVariance(ts)
 ```
 
 #### Decomposition (decompose)
-Additive seasonal decomposition and STL (Season-Trend decomposition using LOESS).
+Additive seasonal decomposition, STL, and MSTL for multiple seasonal periods.
 ```go
 result, _ := decompose.SeasonalDecompose(ts, 12)
 stl, _ := decompose.STL(ts, decompose.STLConfig{Period: 12, Robust: true})
+mstl, _ := decompose.MSTL(ts, decompose.MSTLConfig{Periods: []int{24, 24 * 7}})
 
 trend := result.Trend
 seasonal := result.Seasonal
@@ -175,10 +176,16 @@ residual := result.Residual
 stlTrend := stl.Trend
 stlSeasonal := stl.Seasonal
 stlResidual := stl.Residual
+
+mstlTrend := mstl.Trend
+mstlDaily := mstl.Seasonal[0].Series
+mstlWeekly := mstl.Seasonal[1].Series
+mstlResidual := mstl.Residual
 ```
 
 `SeasonalDecompose` implements the classical additive decomposition approach based on centered moving averages.
 `STL` follows the method introduced by Cleveland, Cleveland, McRae, and Terpenning, "STL: A Seasonal-Trend Decomposition Procedure Based on Loess" (1990).
+`MSTL` extends STL to multiple seasonal periods by iteratively estimating one seasonal component per period.
 
 #### Metrics (metrics)
 Compare series.

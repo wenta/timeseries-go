@@ -10,12 +10,26 @@ import (
 
 // STLConfig configures STL decomposition.
 type STLConfig struct {
-	Period          int
-	Seasonal        int
-	Trend           int
-	LowPass         int
-	Robust          bool
+	// Period is the number of observations in one full seasonal cycle.
+	// Examples include 12 for monthly yearly seasonality or 24 for hourly daily seasonality.
+	Period int
+	// Seasonal controls the LOESS window length used for seasonal smoothing.
+	// Zero uses the default value of 7.
+	Seasonal int
+	// Trend controls the LOESS window length used for trend smoothing.
+	// Zero derives the default from Period and Seasonal using the STL heuristic.
+	Trend int
+	// LowPass controls the low-pass smoother length used to separate the seasonal
+	// component from slowly varying drift in the subseries smoothing step.
+	// Zero derives the default from Period.
+	LowPass int
+	// Robust enables residual-based reweighting so large outliers influence the fit less.
+	Robust bool
+	// InnerIterations controls how many seasonal/trend refinement steps are performed per outer pass.
+	// Zero uses the default value of 2.
 	InnerIterations int
+	// OuterIterations controls how many robust reweighting passes are performed when Robust is enabled.
+	// Zero uses the default value of 15 when Robust is true, otherwise 0.
 	OuterIterations int
 }
 
