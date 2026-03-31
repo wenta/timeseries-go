@@ -37,6 +37,8 @@ func main() {
 	ma := stats.MovingAverage(series, 365*24*time.Hour)
 	fc := forecast.Naive(series, 12)
 	ses := forecast.SimpleExponentialSmoothing(series, 0.2, 12)
+	fcAnchored := exampleutil.AnchoredForecast(series, fc)
+	sesAnchored := exampleutil.AnchoredForecast(series, ses)
 
 	saveChart(outDir, "air_passengers", "AirPassengers", []plot.Series{
 		{Label: "air", Data: series, Color: plot.Gold},
@@ -47,24 +49,71 @@ func main() {
 	})
 	saveChart(outDir, "forecast_comparison", "Naive vs SES Forecast", []plot.Series{
 		{Label: "air", Data: series, Color: plot.Gold},
-		{Label: "naive", Data: fc, Color: plot.DarkOrange, Style: plot.LinePoints},
-		{Label: "ses", Data: ses, Color: plot.DeepSkyBlue, Style: plot.LinePoints},
+		{Label: "naive", Data: fcAnchored, Color: plot.DarkOrange, Style: plot.LinePoints},
+		{Label: "ses", Data: sesAnchored, Color: plot.DeepSkyBlue, Style: plot.LinePoints},
 	}, plot.TimeFormat("2006"))
 
-	exampleBase := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
-	trendIndex := generator.MakeSeriesIndex(exampleBase, 30*time.Minute, 6)
-	trendValues := []float64{10, 12, 13, 16, 18, 21}
+	exampleBase := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	trendIndex := []time.Time{
+		exampleBase,
+		exampleBase.AddDate(0, 1, 0),
+		exampleBase.AddDate(0, 2, 0),
+		exampleBase.AddDate(0, 3, 0),
+		exampleBase.AddDate(0, 4, 0),
+		exampleBase.AddDate(0, 5, 0),
+		exampleBase.AddDate(0, 6, 0),
+		exampleBase.AddDate(0, 7, 0),
+	}
+	trendValues := []float64{120, 128, 133, 142, 150, 159, 166, 176}
 	trendSeries, err := timeseriesgo.Zip(trendIndex, trendValues)
 	if err != nil {
 		log.Fatalf("trend series creation failed: %v", err)
 	}
 	holt := forecast.DoubleExponentialSmoothing(trendSeries, 0.8, 0.2, 3)
 	holtEstimated := forecast.DoubleExponentialSmoothingEstimated(trendSeries, 0.8, 0.2, 3)
+	holtAnchored := exampleutil.AnchoredForecast(trendSeries, holt)
+	holtEstimatedAnchored := exampleutil.AnchoredForecast(trendSeries, holtEstimated)
 	saveChart(outDir, "holt_comparison", "Holt vs Holt Estimated", []plot.Series{
 		{Label: "trend", Data: trendSeries, Color: plot.Gold},
-		{Label: "holt", Data: holt, Color: plot.Cyan, Style: plot.LinePoints},
-		{Label: "holt estimated", Data: holtEstimated, Color: plot.Chartreuse, Style: plot.LinePoints},
-	})
+		{Label: "holt", Data: holtAnchored, Color: plot.Cyan, Style: plot.LinePoints},
+		{Label: "holt estimated", Data: holtEstimatedAnchored, Color: plot.Chartreuse, Style: plot.LinePoints},
+	}, plot.TimeFormat("2006-01"))
+
+	seasonalBase := time.Date(2019, 1, 1, 0, 0, 0, 0, time.UTC)
+	seasonalIndex := []time.Time{
+		seasonalBase,
+		seasonalBase.AddDate(0, 3, 0),
+		seasonalBase.AddDate(0, 6, 0),
+		seasonalBase.AddDate(0, 9, 0),
+		seasonalBase.AddDate(1, 0, 0),
+		seasonalBase.AddDate(1, 3, 0),
+		seasonalBase.AddDate(1, 6, 0),
+		seasonalBase.AddDate(1, 9, 0),
+		seasonalBase.AddDate(2, 0, 0),
+		seasonalBase.AddDate(2, 3, 0),
+		seasonalBase.AddDate(2, 6, 0),
+		seasonalBase.AddDate(2, 9, 0),
+		seasonalBase.AddDate(3, 0, 0),
+		seasonalBase.AddDate(3, 3, 0),
+		seasonalBase.AddDate(3, 6, 0),
+		seasonalBase.AddDate(3, 9, 0),
+	}
+	seasonalValues := []float64{
+		80, 102, 91, 114,
+		86, 108, 97, 120,
+		92, 114, 103, 126,
+		98, 120, 109, 132,
+	}
+	seasonalSeries, err := timeseriesgo.Zip(seasonalIndex, seasonalValues)
+	if err != nil {
+		log.Fatalf("seasonal series creation failed: %v", err)
+	}
+	holtWinters := forecast.TripleExponentialSmoothing(seasonalSeries, 0.6, 0.3, 0.2, 4, 4)
+	holtWintersAnchored := exampleutil.AnchoredForecast(seasonalSeries, holtWinters)
+	saveChart(outDir, "holt_winters_additive", "Holt-Winters Additive Seasonal Forecast", []plot.Series{
+		{Label: "seasonal", Data: seasonalSeries, Color: plot.Gold},
+		{Label: "holt-winters", Data: holtWintersAnchored, Color: plot.DeepSkyBlue, Style: plot.LinePoints},
+	}, plot.TimeFormat("2006-01"))
 
 	flags, err := anomaly.FindAnomaliesWithZScore(series)
 	if err != nil {
@@ -100,14 +149,19 @@ func main() {
 		{Label: "baseline", Data: series2, Color: plot.MediumPurple},
 	})
 
-	walk := generator.RandomWalk(generator.MakeSeriesIndex(exampleBase, 30*time.Minute, 24), 0)
-	spikeFlags, err := anomaly.FindSpikeAnomalies(walk, 3)
+	spikeIndex := generator.MakeSeriesIndex(time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC), 30*time.Minute, 12)
+	spikeValues := []float64{10, 11, 10, 12, 11, 26, 12, 11, 10, 24, 11, 10}
+	spikeSeries, err := timeseriesgo.Zip(spikeIndex, spikeValues)
+	if err != nil {
+		log.Fatalf("spike series creation failed: %v", err)
+	}
+	spikeFlags, err := anomaly.FindSpikeAnomalies(spikeSeries, 8)
 	if err != nil {
 		log.Fatalf("spike detection failed: %v", err)
 	}
-	saveChart(outDir, "spike_anomalies", "Random Walk with Spike Markers", []plot.Series{
-		{Label: "walk", Data: walk, Color: plot.MediumPurple},
-		{Label: "spikes", Data: exampleutil.FlaggedPoints(walk, spikeFlags), Color: plot.Crimson, Style: plot.Points},
+	saveChart(outDir, "spike_anomalies", "Series with Spike Markers", []plot.Series{
+		{Label: "series", Data: spikeSeries, Color: plot.MediumPurple},
+		{Label: "spikes", Data: exampleutil.FlaggedPoints(spikeSeries, spikeFlags), Color: plot.Crimson, Style: plot.Points},
 	})
 
 	mad, _ := metrics.MAD(spikeFlags)

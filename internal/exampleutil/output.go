@@ -84,6 +84,33 @@ func FlaggedPoints(base timeseriesgo.TimeSeries, flags timeseriesgo.TimeSeries) 
 }
 
 /**
+ * AnchoredForecast prepends the last historical datapoint to a forecast series.
+ * This makes forecast lines visually connect to the observed history on plots.
+ *
+ * @param history Original observed TimeSeries.
+ * @param forecast Forecast TimeSeries containing future datapoints.
+ * @return A TimeSeries that starts at the last point of history and continues with forecast.
+ */
+func AnchoredForecast(history timeseriesgo.TimeSeries, forecast timeseriesgo.TimeSeries) timeseriesgo.TimeSeries {
+	if forecast.IsEmpty() {
+		return forecast
+	}
+
+	last, err := history.Last()
+	if err != nil {
+		return forecast
+	}
+
+	points := make([]timeseriesgo.DataPoint, 0, forecast.Length()+1)
+	forecastPoints := forecast.DataPoints()
+	if len(forecastPoints) == 0 || !forecastPoints[0].Timestamp.Equal(last.Timestamp) {
+		points = append(points, last)
+	}
+	points = append(points, forecastPoints...)
+	return timeseriesgo.FromDataPoints(points)
+}
+
+/**
  * PrintOutputDir prints the location where an example wrote its generated artifacts.
  *
  * @param dir Directory path containing generated example files.

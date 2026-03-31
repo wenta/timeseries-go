@@ -31,7 +31,7 @@ func main() {
 	resampled := ts.ResampleWithDefaultValue(time.Hour, -1)
 	interpolated := ts.Interpolate(time.Hour)
 	diffs := interpolated.Differentiate()
-	reconstructed := diffs.Integrate()
+	pairwiseSums := interpolated.Integrate()
 
 	mustSave(outDir, "original_sparse", "Original Sparse Series", []plot.Series{
 		{Label: "original", Data: ts, Color: plot.Gold},
@@ -57,9 +57,9 @@ func main() {
 		{Label: "interpolated", Data: interpolated, Color: plot.DeepSkyBlue},
 		{Label: "differentiate", Data: diffs, Color: plot.DarkOrange},
 	})
-	mustSave(outDir, "integrate", "Integrate", []plot.Series{
-		{Label: "interpolated", Data: interpolated, Color: plot.DeepSkyBlue},
-		{Label: "integrate", Data: reconstructed, Color: plot.MediumPurple},
+	mustSave(outDir, "integrate", "Pairwise Sums (Integrate)", []plot.Series{
+		{Label: "interpolated input", Data: interpolated, Color: plot.DeepSkyBlue},
+		{Label: "pairwise sums", Data: pairwiseSums, Color: plot.MediumPurple},
 	})
 
 	exampleutil.PrintOutputDir(outDir)

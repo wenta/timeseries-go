@@ -171,12 +171,13 @@ mad, _ := metrics.MAD(ts)
 ```
 
 #### Forecasting (forecast)
-Naive forecasts, simple exponential smoothing, and Holt linear trend.
+Naive forecasts, simple exponential smoothing, Holt linear trend, and Holt-Winters additive seasonal forecasting.
 ```go
 fc := forecast.Naive(ts, 3)
 ses := forecast.SimpleExponentialSmoothing(ts, 0.2, 3)
 holt := forecast.DoubleExponentialSmoothing(ts, 0.8, 0.2, 3)
 holtEstimated := forecast.DoubleExponentialSmoothingEstimated(ts, 0.8, 0.2, 3)
+holtWinters := forecast.TripleExponentialSmoothing(ts, 0.6, 0.3, 0.2, 12, 3)
 ```
 
 #### Plotting (plot)

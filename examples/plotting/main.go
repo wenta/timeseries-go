@@ -25,6 +25,7 @@ func main() {
 
 	yearlyMA := stats.MovingAverage(air, 365*24*time.Hour)
 	forecastSeries := forecast.SimpleExponentialSmoothing(air, 0.2, 12)
+	forecastAnchored := exampleutil.AnchoredForecast(air, forecastSeries)
 
 	if err := exampleutil.SaveAllFormatsSeries(
 		filepath.Join(outDir, "air_passengers"),
@@ -51,7 +52,7 @@ func main() {
 		filepath.Join(outDir, "ses_forecast"),
 		[]plot.Series{
 			{Label: "passengers", Data: air, Color: plot.Gold},
-			{Label: "ses", Data: forecastSeries, Color: plot.DeepSkyBlue, Style: plot.LinePoints},
+			{Label: "ses", Data: forecastAnchored, Color: plot.DeepSkyBlue, Style: plot.LinePoints},
 		},
 		plot.Title("Passengers vs SES Forecast"),
 		plot.YLabel("Passengers"),
