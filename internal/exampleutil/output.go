@@ -1,12 +1,14 @@
 package exampleutil
 
 import (
+	"encoding/csv"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	timeseriesgo "github.com/wenta/timeseries-go"
 	"github.com/wenta/timeseries-go/plot"
+	"github.com/wenta/timeseries-go/tsio"
 )
 
 /**
@@ -108,6 +110,25 @@ func AnchoredForecast(history timeseriesgo.TimeSeries, forecast timeseriesgo.Tim
 	}
 	points = append(points, forecastPoints...)
 	return timeseriesgo.FromDataPoints(points)
+}
+
+/**
+ * LoadCSVSeries reads a CSV file into a TimeSeries using the provided time layout.
+ *
+ * @param path File path to the CSV file.
+ * @param timeFormat The Go time layout used to parse timestamps.
+ * @param label The label to assign to the parsed TimeSeries.
+ * @return A parsed TimeSeries or an error if the file cannot be read or parsed.
+ */
+func LoadCSVSeries(path string, timeFormat string, label string) (timeseriesgo.TimeSeries, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return timeseriesgo.EmptyLabeled(label), err
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	return tsio.FromStringWithTimeFormat(*reader, timeFormat, label)
 }
 
 /**
