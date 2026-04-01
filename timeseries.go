@@ -319,31 +319,29 @@ func (ts *TimeSeries) Resample(delta time.Duration, f func(DataPoint, DataPoint,
 		return FromDataPoints(ts.DataPoints())
 	}
 
-	points := ts.DataPoints()
+	points := ts.datapoints
 	result := EmptyLabeled(ts.label + " resampled")
+	result.datapoints = make([]DataPoint, 0, len(points))
 
 	start := points[0].Timestamp
 	end := points[len(points)-1].Timestamp
+	prevIdx := -1
+	nextIdx := 0
 
 	for t := start; !t.After(end); t = t.Add(delta) {
-		// Find bracketing points for t
-		prevIdx := -1
-		nextIdx := -1
-		for i := 0; i < len(points); i++ {
-			if points[i].Timestamp.Equal(t) {
-				result.AddPoint(points[i])
-				prevIdx = -2 // mark exact hit
-				break
-			}
-			if points[i].Timestamp.Before(t) {
-				prevIdx = i
-			} else if points[i].Timestamp.After(t) {
-				nextIdx = i
-				break
-			}
+		for nextIdx < len(points) && points[nextIdx].Timestamp.Before(t) {
+			prevIdx = nextIdx
+			nextIdx++
 		}
 
-		if prevIdx >= 0 && nextIdx >= 0 {
+		if nextIdx < len(points) && points[nextIdx].Timestamp.Equal(t) {
+			result.AddPoint(points[nextIdx])
+			prevIdx = nextIdx
+			nextIdx++
+			continue
+		}
+
+		if prevIdx >= 0 && nextIdx < len(points) {
 			val := f(points[prevIdx], points[nextIdx], t)
 			result.AddPoint(DataPoint{Timestamp: t, Value: val})
 		}
