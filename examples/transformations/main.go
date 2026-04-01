@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"path/filepath"
 	"time"
 
 	timeseriesgo "github.com/wenta/timeseries-go"
@@ -15,6 +14,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("output dir creation failed: %v", err)
 	}
+	report := exampleutil.NewReport("transformations", "Transformation Examples")
 
 	base := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
 	points := []timeseriesgo.DataPoint{
@@ -33,40 +33,43 @@ func main() {
 	diffs := interpolated.Differentiate()
 	pairwiseSums := interpolated.Integrate()
 
-	mustSave(outDir, "original_sparse", "Original Sparse Series", []plot.Series{
+	mustSave(report, outDir, "original_sparse", "Original Sparse Series", []plot.Series{
 		{Label: "original", Data: ts, Color: plot.Gold},
 	})
-	mustSave(outDir, "slice", "Slice", []plot.Series{
+	mustSave(report, outDir, "slice", "Slice", []plot.Series{
 		{Label: "original", Data: ts, Color: plot.Gold},
 		{Label: "slice", Data: sliced, Color: plot.Cyan, Style: plot.Points},
 	})
-	mustSave(outDir, "filter", "Filter >= 18", []plot.Series{
+	mustSave(report, outDir, "filter", "Filter >= 18", []plot.Series{
 		{Label: "scaled", Data: scaled, Color: plot.LightSeaGreen},
 		{Label: "filter >= 18", Data: highOnly, Color: plot.Crimson, Style: plot.Points},
 	})
-	mustSave(outDir, "resample_variants", "Resample Variants", []plot.Series{
+	mustSave(report, outDir, "resample_variants", "Resample Variants", []plot.Series{
 		{Label: "original", Data: ts, Color: plot.Gold, Style: plot.Points},
 		{Label: "interpolated", Data: interpolated, Color: plot.DeepSkyBlue},
 		{Label: "default fill", Data: resampled, Color: plot.Orchid, Style: plot.LinePoints},
 	})
-	mustSave(outDir, "scaled", "Scaled", []plot.Series{
+	mustSave(report, outDir, "scaled", "Scaled", []plot.Series{
 		{Label: "original", Data: ts, Color: plot.Gold},
 		{Label: "scaled", Data: scaled, Color: plot.LightSeaGreen},
 	})
-	mustSave(outDir, "differentiate", "Differentiate", []plot.Series{
+	mustSave(report, outDir, "differentiate", "Differentiate", []plot.Series{
 		{Label: "interpolated", Data: interpolated, Color: plot.DeepSkyBlue},
 		{Label: "differentiate", Data: diffs, Color: plot.DarkOrange},
 	})
-	mustSave(outDir, "integrate", "Pairwise Sums (Integrate)", []plot.Series{
+	mustSave(report, outDir, "integrate", "Pairwise Sums (Integrate)", []plot.Series{
 		{Label: "interpolated input", Data: interpolated, Color: plot.DeepSkyBlue},
 		{Label: "pairwise sums", Data: pairwiseSums, Color: plot.MediumPurple},
 	})
 
+	if _, err := report.Write(outDir); err != nil {
+		log.Fatalf("report generation failed: %v", err)
+	}
 	exampleutil.PrintOutputDir(outDir)
 }
 
-func mustSave(outDir string, slug string, title string, series []plot.Series) {
-	if err := exampleutil.SaveAllFormats(filepath.Join(outDir, slug), series, plot.Title(title)); err != nil {
+func mustSave(report *exampleutil.Report, outDir string, slug string, title string, series []plot.Series) {
+	if err := report.SaveChart(outDir, slug, title, series); err != nil {
 		log.Fatalf("%s plot failed: %v", slug, err)
 	}
 }

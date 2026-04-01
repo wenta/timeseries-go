@@ -185,6 +185,138 @@ func TestACFInvalidInput(t *testing.T) {
 	}
 }
 
+func TestAutocorrelation(t *testing.T) {
+	base := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+
+	ts := timeseriesgo.Empty()
+	values := []float64{1, 2, 3, 4}
+	for i, value := range values {
+		ts.AddPoint(timeseriesgo.DataPoint{
+			Timestamp: base.Add(time.Duration(i) * time.Minute),
+			Value:     value,
+		})
+	}
+
+	correlation, err := Autocorrelation(ts, 2)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if math.Abs(correlation-(-0.3)) > 1e-9 {
+		t.Fatalf("expected lag-2 autocorrelation -0.3, got %f", correlation)
+	}
+}
+
+func TestAutocorrelationInvalidInput(t *testing.T) {
+	base := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+
+	constant := timeseriesgo.Empty()
+	constant.AddPoint(timeseriesgo.DataPoint{Timestamp: base, Value: 5})
+	constant.AddPoint(timeseriesgo.DataPoint{Timestamp: base.Add(time.Minute), Value: 5})
+
+	valid := timeseriesgo.Empty()
+	valid.AddPoint(timeseriesgo.DataPoint{Timestamp: base, Value: 1})
+	valid.AddPoint(timeseriesgo.DataPoint{Timestamp: base.Add(time.Minute), Value: 2})
+	valid.AddPoint(timeseriesgo.DataPoint{Timestamp: base.Add(2 * time.Minute), Value: 3})
+
+	cases := []struct {
+		name string
+		ts   timeseriesgo.TimeSeries
+		lag  int
+	}{
+		{name: "empty", ts: timeseriesgo.Empty(), lag: 1},
+		{name: "negative lag", ts: valid, lag: -1},
+		{name: "too large lag", ts: valid, lag: 3},
+		{name: "zero variance", ts: constant, lag: 1},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := Autocorrelation(tc.ts, tc.lag); err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+		})
+	}
+}
+
+func TestCompareSeriesStats(t *testing.T) {
+	base := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+
+	original := timeseriesgo.Empty()
+	synthetic := timeseriesgo.Empty()
+	for i, value := range []float64{1, 2, 3} {
+		original.AddPoint(timeseriesgo.DataPoint{
+			Timestamp: base.Add(time.Duration(i) * time.Minute),
+			Value:     value,
+		})
+	}
+	for i, value := range []float64{1, 2, 3} {
+		synthetic.AddPoint(timeseriesgo.DataPoint{
+			Timestamp: base.Add(time.Duration(i) * time.Minute),
+			Value:     value,
+		})
+	}
+
+	comparison, err := CompareSeriesStats(original, synthetic)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if comparison.MeanOriginal != 2 || comparison.MeanSynthetic != 2 {
+		t.Fatalf("expected both means to equal 2, got %+v", comparison)
+	}
+	if comparison.LengthOriginal != 3 || comparison.LengthSynthetic != 3 {
+		t.Fatalf("expected both lengths to equal 3, got %+v", comparison)
+	}
+	if comparison.VarianceOriginal != comparison.VarianceSynthetic {
+		t.Fatalf("expected identical variances, got %+v", comparison)
+	}
+	if math.IsNaN(comparison.Lag1Original) || math.IsNaN(comparison.Lag1Synthetic) {
+		t.Fatalf("expected lag-1 autocorrelation to be available, got %+v", comparison)
+	}
+}
+
+func TestCompareSeriesStatsDifferentSeries(t *testing.T) {
+	base := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+
+	original := timeseriesgo.Empty()
+	synthetic := timeseriesgo.Empty()
+	for i, value := range []float64{1, 2, 3} {
+		original.AddPoint(timeseriesgo.DataPoint{
+			Timestamp: base.Add(time.Duration(i) * time.Minute),
+			Value:     value,
+		})
+	}
+	for i, value := range []float64{10, 10, 10} {
+		synthetic.AddPoint(timeseriesgo.DataPoint{
+			Timestamp: base.Add(time.Duration(i) * time.Minute),
+			Value:     value,
+		})
+	}
+
+	comparison, err := CompareSeriesStats(original, synthetic)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if comparison.MeanOriginal == comparison.MeanSynthetic {
+		t.Fatalf("expected different means, got %+v", comparison)
+	}
+	if comparison.VarianceOriginal == comparison.VarianceSynthetic {
+		t.Fatalf("expected different variances, got %+v", comparison)
+	}
+	if !math.IsNaN(comparison.Lag1Synthetic) {
+		t.Fatalf("expected lag-1 autocorrelation to be NaN for constant synthetic series, got %+v", comparison)
+	}
+}
+
+func TestCompareSeriesStatsEmpty(t *testing.T) {
+	_, err := CompareSeriesStats(timeseriesgo.Empty(), timeseriesgo.Empty())
+	if err == nil {
+		t.Fatal("expected error for empty series, got nil")
+	}
+}
+
 func TestMinMaxNormalize(t *testing.T) {
 	base := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
 

@@ -14,6 +14,18 @@ type MeanAndVariance struct {
 	PopulationVariance float64
 }
 
+// SeriesComparison stores a small comparison summary for original and synthetic series.
+type SeriesComparison struct {
+	LengthOriginal    int
+	LengthSynthetic   int
+	MeanOriginal      float64
+	MeanSynthetic     float64
+	VarianceOriginal  float64
+	VarianceSynthetic float64
+	Lag1Original      float64
+	Lag1Synthetic     float64
+}
+
 /**
  * Calculates the mean and variance of the values in the TimeSeries.
  *
@@ -205,6 +217,78 @@ func ACF(ts timeseriesgo.TimeSeries, nlags int) ([]float64, error) {
 	}
 
 	return acf, nil
+}
+
+/**
+ * Calculates autocorrelation for a single lag of a TimeSeries.
+ *
+ * This helper uses the same estimator as ACF and returns the value at the
+ * requested lag directly.
+ *
+ * @param ts The TimeSeries whose autocorrelation is computed.
+ * @param lag The lag to evaluate. Lag 0 equals 1 for a series with non-zero variance.
+ *
+ * @return The autocorrelation at the requested lag, or an error if the calculation cannot be performed.
+ */
+func Autocorrelation(ts timeseriesgo.TimeSeries, lag int) (float64, error) {
+	acf, err := ACF(ts, lag)
+	if err != nil {
+		return 0, err
+	}
+	return acf[lag], nil
+}
+
+/**
+ * Compares two series using stable summary statistics on raw values.
+ *
+ * The comparison is computed independently for each series without aligning
+ * timestamps. Variance fields use the population variance returned by
+ * GetMeanAndVariance to keep the summary stable across different lengths.
+ * Lag-1 autocorrelation is included when it can be computed; otherwise the
+ * corresponding field is set to NaN.
+ *
+ * @param original The reference TimeSeries.
+ * @param synthetic The synthetic or derived TimeSeries to compare.
+ *
+ * @return A SeriesComparison with mean and variance summaries for both series, or an error if either series is empty.
+ */
+func CompareSeriesStats(original, synthetic timeseriesgo.TimeSeries) (SeriesComparison, error) {
+	if original.IsEmpty() || synthetic.IsEmpty() {
+		return SeriesComparison{}, errors.New("one or both TimeSeries are empty")
+	}
+
+	originalStats, err := GetMeanAndVariance(original)
+	if err != nil {
+		return SeriesComparison{}, err
+	}
+
+	syntheticStats, err := GetMeanAndVariance(synthetic)
+	if err != nil {
+		return SeriesComparison{}, err
+	}
+
+	return SeriesComparison{
+		LengthOriginal:    original.Length(),
+		LengthSynthetic:   synthetic.Length(),
+		MeanOriginal:      originalStats.Mean,
+		MeanSynthetic:     syntheticStats.Mean,
+		VarianceOriginal:  originalStats.PopulationVariance,
+		VarianceSynthetic: syntheticStats.PopulationVariance,
+		Lag1Original:      lagOrNaN(original),
+		Lag1Synthetic:     lagOrNaN(synthetic),
+	}, nil
+}
+
+func lagOrNaN(ts timeseriesgo.TimeSeries) float64 {
+	if ts.Length() < 2 {
+		return math.NaN()
+	}
+
+	value, err := Autocorrelation(ts, 1)
+	if err != nil {
+		return math.NaN()
+	}
+	return value
 }
 
 /**

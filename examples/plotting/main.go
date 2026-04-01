@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"path/filepath"
 	"time"
 
 	"github.com/wenta/timeseries-go/forecast"
@@ -16,6 +15,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("output dir creation failed: %v", err)
 	}
+	report := exampleutil.NewReport("plotting", "Plotting Examples")
 
 	air, err := exampleutil.LoadCSVSeries("examples/data/air_passengers.csv", "2006-01-02", "air-passengers")
 	if err != nil {
@@ -26,39 +26,45 @@ func main() {
 	forecastSeries := forecast.SimpleExponentialSmoothing(air, 0.2, 12)
 	forecastAnchored := exampleutil.AnchoredForecast(air, forecastSeries)
 
-	if err := exampleutil.SaveAllFormatsSeries(
-		filepath.Join(outDir, "air_passengers"),
+	if err := report.SaveChartSeries(
+		outDir,
+		"air_passengers",
+		"AirPassengers",
 		air,
-		plot.Title("AirPassengers"),
 		plot.YLabel("Passengers"),
 	); err != nil {
 		log.Fatalf("single series plot failed: %v", err)
 	}
 
-	if err := exampleutil.SaveAllFormats(
-		filepath.Join(outDir, "moving_average"),
+	if err := report.SaveChart(
+		outDir,
+		"moving_average",
+		"Passengers vs Moving Average",
 		[]plot.Series{
 			{Label: "passengers", Data: air, Color: plot.Gold},
 			{Label: "yearly MA", Data: yearlyMA, Color: plot.LightSeaGreen, Style: plot.Points},
 		},
-		plot.Title("Passengers vs Moving Average"),
 		plot.YLabel("Passengers"),
 	); err != nil {
 		log.Fatalf("moving average plot failed: %v", err)
 	}
 
-	if err := exampleutil.SaveAllFormats(
-		filepath.Join(outDir, "ses_forecast"),
+	if err := report.SaveChart(
+		outDir,
+		"ses_forecast",
+		"Passengers vs SES Forecast",
 		[]plot.Series{
 			{Label: "passengers", Data: air, Color: plot.Gold},
 			{Label: "ses", Data: forecastAnchored, Color: plot.DeepSkyBlue, Style: plot.LinePoints},
 		},
-		plot.Title("Passengers vs SES Forecast"),
 		plot.YLabel("Passengers"),
 		plot.TimeFormat("2006"),
 	); err != nil {
 		log.Fatalf("ses forecast plot failed: %v", err)
 	}
 
+	if _, err := report.Write(outDir); err != nil {
+		log.Fatalf("report generation failed: %v", err)
+	}
 	exampleutil.PrintOutputDir(outDir)
 }

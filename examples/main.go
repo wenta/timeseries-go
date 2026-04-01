@@ -4,7 +4,6 @@ import (
 	"encoding/csv"
 	"fmt"
 	"log"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -24,6 +23,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("output dir creation failed: %v", err)
 	}
+	report := exampleutil.NewReport("main", "Guided Tour")
 
 	series, err := exampleutil.LoadCSVSeries("examples/data/air_passengers.csv", "2006-01-02", "air-passengers")
 	if err != nil {
@@ -39,14 +39,14 @@ func main() {
 	fcAnchored := exampleutil.AnchoredForecast(series, fc)
 	sesAnchored := exampleutil.AnchoredForecast(series, ses)
 
-	saveChart(outDir, "air_passengers", "AirPassengers", []plot.Series{
+	saveChart(report, outDir, "air_passengers", "AirPassengers", []plot.Series{
 		{Label: "air", Data: series, Color: plot.Gold},
 	})
-	saveChart(outDir, "moving_average", "AirPassengers vs Moving Average", []plot.Series{
+	saveChart(report, outDir, "moving_average", "AirPassengers vs Moving Average", []plot.Series{
 		{Label: "air", Data: series, Color: plot.Gold},
 		{Label: "moving average", Data: ma, Color: plot.LightSeaGreen, Style: plot.Points},
 	})
-	saveChart(outDir, "forecast_comparison", "Naive vs SES Forecast", []plot.Series{
+	saveChart(report, outDir, "forecast_comparison", "Naive vs SES Forecast", []plot.Series{
 		{Label: "air", Data: series, Color: plot.Gold},
 		{Label: "naive", Data: fcAnchored, Color: plot.DarkOrange, Style: plot.LinePoints},
 		{Label: "ses", Data: sesAnchored, Color: plot.DeepSkyBlue, Style: plot.LinePoints},
@@ -72,7 +72,7 @@ func main() {
 	holtEstimated := forecast.DoubleExponentialSmoothingEstimated(trendSeries, 0.8, 0.2, 3)
 	holtAnchored := exampleutil.AnchoredForecast(trendSeries, holt)
 	holtEstimatedAnchored := exampleutil.AnchoredForecast(trendSeries, holtEstimated)
-	saveChart(outDir, "holt_comparison", "Holt vs Holt Estimated", []plot.Series{
+	saveChart(report, outDir, "holt_comparison", "Holt vs Holt Estimated", []plot.Series{
 		{Label: "trend", Data: trendSeries, Color: plot.Gold},
 		{Label: "holt", Data: holtAnchored, Color: plot.Cyan, Style: plot.LinePoints},
 		{Label: "holt estimated", Data: holtEstimatedAnchored, Color: plot.Chartreuse, Style: plot.LinePoints},
@@ -109,7 +109,7 @@ func main() {
 	}
 	holtWinters := forecast.TripleExponentialSmoothing(seasonalSeries, 0.6, 0.3, 0.2, 4, 4)
 	holtWintersAnchored := exampleutil.AnchoredForecast(seasonalSeries, holtWinters)
-	saveChart(outDir, "holt_winters_additive", "Holt-Winters Additive Seasonal Forecast", []plot.Series{
+	saveChart(report, outDir, "holt_winters_additive", "Holt-Winters Additive Seasonal Forecast", []plot.Series{
 		{Label: "seasonal", Data: seasonalSeries, Color: plot.Gold},
 		{Label: "holt-winters", Data: holtWintersAnchored, Color: plot.DeepSkyBlue, Style: plot.LinePoints},
 	}, plot.TimeFormat("2006-01"))
@@ -118,7 +118,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("zscore failed: %v", err)
 	}
-	saveChart(outDir, "zscore_anomalies", "Z-Score Anomalies", []plot.Series{
+	saveChart(report, outDir, "zscore_anomalies", "Z-Score Anomalies", []plot.Series{
 		{Label: "air", Data: series, Color: plot.Gold},
 		{Label: "anomalies", Data: exampleutil.FlaggedPoints(series, flags), Color: plot.Crimson, Style: plot.Points},
 	})
@@ -133,7 +133,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("parse failed: %v", err)
 	}
-	saveChart(outDir, "reloaded", "Original vs Reloaded", []plot.Series{
+	saveChart(report, outDir, "reloaded", "Original vs Reloaded", []plot.Series{
 		{Label: "original", Data: series, Color: plot.Gold},
 		{Label: "reloaded", Data: reloaded, Color: plot.Orchid},
 	})
@@ -143,7 +143,7 @@ func main() {
 	rmse, _ := metrics.RMSE(series, series2)
 	mae, _ := metrics.MAE(series, series2)
 	fmt.Printf("MSE=%.2f RMSE=%.2f MAE=%.2f\n", mse, rmse, mae)
-	saveChart(outDir, "constant_baseline", "AirPassengers vs Constant Baseline", []plot.Series{
+	saveChart(report, outDir, "constant_baseline", "AirPassengers vs Constant Baseline", []plot.Series{
 		{Label: "air", Data: series, Color: plot.Gold},
 		{Label: "baseline", Data: series2, Color: plot.MediumPurple},
 	})
@@ -158,18 +158,21 @@ func main() {
 	if err != nil {
 		log.Fatalf("spike detection failed: %v", err)
 	}
-	saveChart(outDir, "spike_anomalies", "Series with Spike Markers", []plot.Series{
+	saveChart(report, outDir, "spike_anomalies", "Series with Spike Markers", []plot.Series{
 		{Label: "series", Data: spikeSeries, Color: plot.MediumPurple},
 		{Label: "spikes", Data: exampleutil.FlaggedPoints(spikeSeries, spikeFlags), Color: plot.Crimson, Style: plot.Points},
 	})
 
 	mad, _ := metrics.MAD(spikeFlags)
 	fmt.Printf("MAD of spike flags: %.2f\n", mad)
+	if _, err := report.Write(outDir); err != nil {
+		log.Fatalf("report generation failed: %v", err)
+	}
 	exampleutil.PrintOutputDir(outDir)
 }
 
-func saveChart(outDir string, slug string, title string, series []plot.Series, opts ...plot.Option) {
-	if err := exampleutil.SaveAllFormats(filepath.Join(outDir, slug), series, append([]plot.Option{plot.Title(title)}, opts...)...); err != nil {
+func saveChart(report *exampleutil.Report, outDir string, slug string, title string, series []plot.Series, opts ...plot.Option) {
+	if err := report.SaveChart(outDir, slug, title, series, opts...); err != nil {
 		log.Fatalf("%s plot failed: %v", slug, err)
 	}
 }

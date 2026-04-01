@@ -3,11 +3,12 @@ package main
 import (
 	"image/color"
 	"log"
-	"path/filepath"
+	"math"
 	"time"
 
 	timeseriesgo "github.com/wenta/timeseries-go"
 	"github.com/wenta/timeseries-go/anomaly"
+	"github.com/wenta/timeseries-go/generator"
 	"github.com/wenta/timeseries-go/internal/exampleutil"
 	"github.com/wenta/timeseries-go/plot"
 )
@@ -17,21 +18,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("output dir creation failed: %v", err)
 	}
+	report := exampleutil.NewReport("anomalies", "Anomaly Detection Examples")
 
-	base := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
-	points := []timeseriesgo.DataPoint{
-		{Timestamp: base, Value: 10},
-		{Timestamp: base.Add(time.Hour), Value: 11},
-		{Timestamp: base.Add(2 * time.Hour), Value: 12},
-		{Timestamp: base.Add(3 * time.Hour), Value: 40},
-		{Timestamp: base.Add(4 * time.Hour), Value: 13},
-		{Timestamp: base.Add(5 * time.Hour), Value: 12},
-		{Timestamp: base.Add(6 * time.Hour), Value: 4},
-		{Timestamp: base.Add(7 * time.Hour), Value: 4},
-		{Timestamp: base.Add(8 * time.Hour), Value: 4},
-		{Timestamp: base.Add(9 * time.Hour), Value: 15},
+	ts, err := syntheticAnomalySeries()
+	if err != nil {
+		log.Fatalf("synthetic anomaly series creation failed: %v", err)
 	}
-	ts := timeseriesgo.FromDataPoints(points)
 
 	zFlags, err := anomaly.FindAnomaliesWithZScore(ts)
 	if err != nil {
@@ -54,34 +46,63 @@ func main() {
 		log.Fatalf("flatline anomaly detection failed: %v", err)
 	}
 
-	mustSave(outDir, "zscore", "Series with Z-Score Anomalies", ts, exampleutil.FlaggedPoints(ts, zFlags), plot.Crimson)
-	mustSave(outDir, "robust", "Series with Robust Z-Score Anomalies", ts, exampleutil.FlaggedPoints(ts, robustFlags), plot.DeepSkyBlue)
+	mustSave(report, outDir, "zscore", "Hourly Series with Z-Score Anomalies", ts, exampleutil.FlaggedPoints(ts, zFlags), plot.Crimson)
+	mustSave(report, outDir, "robust", "Hourly Series with Robust Z-Score Anomalies", ts, exampleutil.FlaggedPoints(ts, robustFlags), plot.DeepSkyBlue)
 
-	if err := exampleutil.SaveAllFormats(
-		filepath.Join(outDir, "specialized"),
+	if err := report.SaveChart(
+		outDir,
+		"specialized",
+		"Spike, Drop, and Flatline Markers",
 		[]plot.Series{
 			{Label: "series", Data: ts, Color: plot.Gold},
 			{Label: "spikes", Data: exampleutil.FlaggedPoints(ts, spikes), Color: plot.DarkOrange, Style: plot.Points},
 			{Label: "drops", Data: exampleutil.FlaggedPoints(ts, drops), Color: plot.Cyan, Style: plot.Points},
 			{Label: "flatline", Data: exampleutil.FlaggedPoints(ts, flat), Color: plot.Chartreuse, Style: plot.Points},
 		},
-		plot.Title("Specialized Anomaly Markers"),
+		plot.TimeFormat("2006-01-02"),
 	); err != nil {
 		log.Fatalf("specialized anomaly plot failed: %v", err)
 	}
 
+	if _, err := report.Write(outDir); err != nil {
+		log.Fatalf("report generation failed: %v", err)
+	}
 	exampleutil.PrintOutputDir(outDir)
 }
 
-func mustSave(outDir string, slug string, title string, base timeseriesgo.TimeSeries, markers timeseriesgo.TimeSeries, clr color.Color) {
-	if err := exampleutil.SaveAllFormats(
-		filepath.Join(outDir, slug),
+func mustSave(report *exampleutil.Report, outDir string, slug string, title string, base timeseriesgo.TimeSeries, markers timeseriesgo.TimeSeries, clr color.Color) {
+	if err := report.SaveChart(
+		outDir,
+		slug,
+		title,
 		[]plot.Series{
 			{Label: "series", Data: base, Color: plot.Gold},
 			{Label: "anomalies", Data: markers, Color: clr, Style: plot.Points},
 		},
-		plot.Title(title),
+		plot.TimeFormat("2006-01-02"),
 	); err != nil {
 		log.Fatalf("%s anomaly plot failed: %v", slug, err)
 	}
+}
+
+func syntheticAnomalySeries() (timeseriesgo.TimeSeries, error) {
+	base := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	index := generator.MakeSeriesIndex(base, time.Hour, 24*21)
+	values := make([]float64, len(index))
+
+	for i := range values {
+		daily := 7 * math.Sin(2*math.Pi*float64(i%24)/24)
+		weekly := 4 * math.Cos(2*math.Pi*float64(i%168)/168)
+		trend := 80.0 + 0.015*float64(i)
+		values[i] = trend + daily + weekly
+	}
+
+	values[60] += 24
+	values[143] -= 22
+	values[280] += 18
+	for i := 320; i < 330; i++ {
+		values[i] = 77.5
+	}
+
+	return timeseriesgo.Zip(index, values)
 }
