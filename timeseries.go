@@ -523,22 +523,39 @@ func (ts *TimeSeries) Merge(otherTS TimeSeries) TimeSeries {
 func (ts *TimeSeries) Join(otherTS TimeSeries) AlignedSeries {
 	if ts.IsEmpty() || otherTS.IsEmpty() {
 		return EmptyLabeledAlignedSeries("empty series")
-	} else {
-		res := EmptyLabeledAlignedSeries(ts.label + " joined with " + otherTS.label)
-
-		for _, leftValue := range ts.datapoints {
-			for _, rightValue := range otherTS.datapoints {
-				if leftValue.Timestamp.Equal(rightValue.Timestamp) {
-					res.datapoints = append(res.datapoints, DoubleDataPoint{
-						Timestamp:  leftValue.Timestamp,
-						LeftValue:  leftValue.Value,
-						RightValue: rightValue.Value,
-					})
-				}
-			}
-		}
-		return res
 	}
+
+	res := EmptyLabeledAlignedSeries(ts.label + " joined with " + otherTS.label)
+	capacity := ts.Length()
+	if otherTS.Length() < capacity {
+		capacity = otherTS.Length()
+	}
+	res.datapoints = make([]DoubleDataPoint, 0, capacity)
+
+	leftIdx, rightIdx := 0, 0
+	for leftIdx < len(ts.datapoints) && rightIdx < len(otherTS.datapoints) {
+		leftValue := ts.datapoints[leftIdx]
+		rightValue := otherTS.datapoints[rightIdx]
+
+		if leftValue.Timestamp.Before(rightValue.Timestamp) {
+			leftIdx++
+			continue
+		}
+		if rightValue.Timestamp.Before(leftValue.Timestamp) {
+			rightIdx++
+			continue
+		}
+
+		res.datapoints = append(res.datapoints, DoubleDataPoint{
+			Timestamp:  leftValue.Timestamp,
+			LeftValue:  leftValue.Value,
+			RightValue: rightValue.Value,
+		})
+		leftIdx++
+		rightIdx++
+	}
+
+	return res
 }
 
 /**
@@ -552,32 +569,30 @@ func (ts *TimeSeries) Join(otherTS TimeSeries) AlignedSeries {
 func (ts *TimeSeries) JoinLeft(otherTS TimeSeries, defaultValue float64) AlignedSeries {
 	if ts.IsEmpty() {
 		return EmptyLabeledAlignedSeries("empty series")
-	} else {
-		res := EmptyLabeledAlignedSeries(ts.label + " joined with " + otherTS.label)
-
-		for _, leftValue := range ts.datapoints {
-			matched := false
-			for _, rightValue := range otherTS.datapoints {
-				if leftValue.Timestamp.Equal(rightValue.Timestamp) {
-					res.datapoints = append(res.datapoints, DoubleDataPoint{
-						Timestamp:  leftValue.Timestamp,
-						LeftValue:  leftValue.Value,
-						RightValue: rightValue.Value,
-					})
-					matched = true
-					break
-				}
-			}
-			if !matched {
-				res.datapoints = append(res.datapoints, DoubleDataPoint{
-					Timestamp:  leftValue.Timestamp,
-					LeftValue:  leftValue.Value,
-					RightValue: defaultValue,
-				})
-			}
-		}
-		return res
 	}
+
+	res := EmptyLabeledAlignedSeries(ts.label + " joined with " + otherTS.label)
+	res.datapoints = make([]DoubleDataPoint, 0, ts.Length())
+
+	rightIdx := 0
+	for _, leftValue := range ts.datapoints {
+		for rightIdx < len(otherTS.datapoints) && otherTS.datapoints[rightIdx].Timestamp.Before(leftValue.Timestamp) {
+			rightIdx++
+		}
+
+		rightValue := defaultValue
+		if rightIdx < len(otherTS.datapoints) && otherTS.datapoints[rightIdx].Timestamp.Equal(leftValue.Timestamp) {
+			rightValue = otherTS.datapoints[rightIdx].Value
+		}
+
+		res.datapoints = append(res.datapoints, DoubleDataPoint{
+			Timestamp:  leftValue.Timestamp,
+			LeftValue:  leftValue.Value,
+			RightValue: rightValue,
+		})
+	}
+
+	return res
 }
 
 /**
@@ -592,47 +607,66 @@ func (ts *TimeSeries) JoinLeft(otherTS TimeSeries, defaultValue float64) Aligned
 func (ts *TimeSeries) JoinOuter(otherTS TimeSeries, defaultLeftValue float64, defaultRightValue float64) AlignedSeries {
 	if ts.IsEmpty() && otherTS.IsEmpty() {
 		return EmptyLabeledAlignedSeries("empty series")
-	} else {
-		res := EmptyLabeledAlignedSeries(ts.label + " joined with " + otherTS.label)
-		for _, leftValue := range ts.datapoints {
-			matched := false
-			for _, rightValue := range otherTS.datapoints {
-				if leftValue.Timestamp.Equal(rightValue.Timestamp) {
-					res.datapoints = append(res.datapoints, DoubleDataPoint{
-						Timestamp:  leftValue.Timestamp,
-						LeftValue:  leftValue.Value,
-						RightValue: rightValue.Value,
-					})
-					matched = true
-					break
-				}
-			}
-			if !matched {
-				res.datapoints = append(res.datapoints, DoubleDataPoint{
-					Timestamp:  leftValue.Timestamp,
-					LeftValue:  leftValue.Value,
-					RightValue: defaultRightValue,
-				})
-			}
-		}
-		for _, rightValue := range otherTS.datapoints {
-			matched := false
-			for _, leftValue := range ts.datapoints {
-				if rightValue.Timestamp.Equal(leftValue.Timestamp) {
-					matched = true
-					break
-				}
-			}
-			if !matched {
-				res.datapoints = append(res.datapoints, DoubleDataPoint{
-					Timestamp:  rightValue.Timestamp,
-					LeftValue:  defaultLeftValue,
-					RightValue: rightValue.Value,
-				})
-			}
-		}
-		return res
 	}
+
+	res := EmptyLabeledAlignedSeries(ts.label + " joined with " + otherTS.label)
+	res.datapoints = make([]DoubleDataPoint, 0, ts.Length()+otherTS.Length())
+
+	leftIdx, rightIdx := 0, 0
+	for leftIdx < len(ts.datapoints) && rightIdx < len(otherTS.datapoints) {
+		leftValue := ts.datapoints[leftIdx]
+		rightValue := otherTS.datapoints[rightIdx]
+
+		if leftValue.Timestamp.Before(rightValue.Timestamp) {
+			res.datapoints = append(res.datapoints, DoubleDataPoint{
+				Timestamp:  leftValue.Timestamp,
+				LeftValue:  leftValue.Value,
+				RightValue: defaultRightValue,
+			})
+			leftIdx++
+			continue
+		}
+
+		if rightValue.Timestamp.Before(leftValue.Timestamp) {
+			res.datapoints = append(res.datapoints, DoubleDataPoint{
+				Timestamp:  rightValue.Timestamp,
+				LeftValue:  defaultLeftValue,
+				RightValue: rightValue.Value,
+			})
+			rightIdx++
+			continue
+		}
+
+		res.datapoints = append(res.datapoints, DoubleDataPoint{
+			Timestamp:  leftValue.Timestamp,
+			LeftValue:  leftValue.Value,
+			RightValue: rightValue.Value,
+		})
+		leftIdx++
+		rightIdx++
+	}
+
+	for leftIdx < len(ts.datapoints) {
+		leftValue := ts.datapoints[leftIdx]
+		res.datapoints = append(res.datapoints, DoubleDataPoint{
+			Timestamp:  leftValue.Timestamp,
+			LeftValue:  leftValue.Value,
+			RightValue: defaultRightValue,
+		})
+		leftIdx++
+	}
+
+	for rightIdx < len(otherTS.datapoints) {
+		rightValue := otherTS.datapoints[rightIdx]
+		res.datapoints = append(res.datapoints, DoubleDataPoint{
+			Timestamp:  rightValue.Timestamp,
+			LeftValue:  defaultLeftValue,
+			RightValue: rightValue.Value,
+		})
+		rightIdx++
+	}
+
+	return res
 }
 
 /**
