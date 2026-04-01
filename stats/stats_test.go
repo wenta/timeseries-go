@@ -1,6 +1,7 @@
 package stats
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -67,7 +68,6 @@ func TestMovingAverageWindow(t *testing.T) {
 func TestCorrelation(t *testing.T) {
 	base := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
 
-	
 	ts1 := timeseriesgo.Empty()
 	ts2 := timeseriesgo.Empty()
 
@@ -98,7 +98,6 @@ func TestCorrelation(t *testing.T) {
 func TestCorrelationEdgeCases(t *testing.T) {
 	base := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
 
-	
 	ts1 := timeseriesgo.Empty()
 	ts2 := timeseriesgo.Empty()
 
@@ -112,7 +111,6 @@ func TestCorrelationEdgeCases(t *testing.T) {
 		t.Errorf("expected error for zero variance")
 	}
 
-	
 	ts3 := timeseriesgo.Empty()
 	ts4 := timeseriesgo.Empty()
 
@@ -121,6 +119,69 @@ func TestCorrelationEdgeCases(t *testing.T) {
 
 	if _, err := Correlation(ts3, ts4); err == nil {
 		t.Errorf("expected error for insufficient points")
+	}
+}
+
+func TestACF(t *testing.T) {
+	base := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+
+	ts := timeseriesgo.Empty()
+	values := []float64{1, 2, 3, 4}
+	for i, value := range values {
+		ts.AddPoint(timeseriesgo.DataPoint{
+			Timestamp: base.Add(time.Duration(i) * time.Minute),
+			Value:     value,
+		})
+	}
+
+	acf, err := ACF(ts, 3)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expected := []float64{1.0, 0.25, -0.3, -0.45}
+	const epsilon = 1e-9
+	for i := range expected {
+		if math.Abs(acf[i]-expected[i]) > epsilon {
+			t.Fatalf("lag %d: expected %f, got %f", i, expected[i], acf[i])
+		}
+	}
+}
+
+func TestACFInvalidInput(t *testing.T) {
+	base := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+
+	onePoint := timeseriesgo.Empty()
+	onePoint.AddPoint(timeseriesgo.DataPoint{Timestamp: base, Value: 1})
+
+	constant := timeseriesgo.Empty()
+	constant.AddPoint(timeseriesgo.DataPoint{Timestamp: base, Value: 5})
+	constant.AddPoint(timeseriesgo.DataPoint{Timestamp: base.Add(time.Minute), Value: 5})
+	constant.AddPoint(timeseriesgo.DataPoint{Timestamp: base.Add(2 * time.Minute), Value: 5})
+
+	valid := timeseriesgo.Empty()
+	valid.AddPoint(timeseriesgo.DataPoint{Timestamp: base, Value: 1})
+	valid.AddPoint(timeseriesgo.DataPoint{Timestamp: base.Add(time.Minute), Value: 2})
+	valid.AddPoint(timeseriesgo.DataPoint{Timestamp: base.Add(2 * time.Minute), Value: 3})
+
+	cases := []struct {
+		name  string
+		ts    timeseriesgo.TimeSeries
+		nlags int
+	}{
+		{name: "empty", ts: timeseriesgo.Empty(), nlags: 1},
+		{name: "negative lags", ts: valid, nlags: -1},
+		{name: "single point", ts: onePoint, nlags: 0},
+		{name: "too many lags", ts: valid, nlags: 3},
+		{name: "zero variance", ts: constant, nlags: 1},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := ACF(tc.ts, tc.nlags); err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+		})
 	}
 }
 

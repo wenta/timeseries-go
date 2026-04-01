@@ -156,6 +156,58 @@ func Correlation(ts1, ts2 timeseriesgo.TimeSeries) (float64, error) {
 }
 
 /**
+ * Calculates the autocorrelation function (ACF) of a TimeSeries for lags 0..nlags.
+ *
+ * The returned slice always starts with lag 0, which equals 1 for a series with non-zero variance.
+ * This implementation uses the full-series mean and variance denominator, matching the
+ * standard biased autocorrelation estimator.
+ *
+ * @param ts The TimeSeries whose autocorrelation is computed.
+ * @param nlags The maximum lag to include in the result.
+ *
+ * @return A slice of autocorrelation values for lags 0 through nlags, or an error if the calculation cannot be performed.
+ */
+func ACF(ts timeseriesgo.TimeSeries, nlags int) ([]float64, error) {
+	if ts.IsEmpty() {
+		return nil, errors.New("TimeSeries is empty")
+	}
+	if nlags < 0 {
+		return nil, errors.New("nlags must be non-negative")
+	}
+	if ts.Length() < 2 {
+		return nil, errors.New("TimeSeries must contain at least two points")
+	}
+	if nlags >= ts.Length() {
+		return nil, errors.New("nlags must be smaller than the series length")
+	}
+
+	values := ts.Values()
+	mean := ts.Sum() / float64(ts.Length())
+
+	denominator := 0.0
+	centered := make([]float64, len(values))
+	for i, value := range values {
+		centered[i] = value - mean
+		denominator += centered[i] * centered[i]
+	}
+
+	if denominator == 0 {
+		return nil, errors.New("zero variance in TimeSeries")
+	}
+
+	acf := make([]float64, nlags+1)
+	for lag := 0; lag <= nlags; lag++ {
+		numerator := 0.0
+		for i := lag; i < len(centered); i++ {
+			numerator += centered[i] * centered[i-lag]
+		}
+		acf[lag] = numerator / denominator
+	}
+
+	return acf, nil
+}
+
+/**
  * Normalizes the TimeSeries values to the [0,1] range while preserving timestamps.
  *
  * @param ts The TimeSeries to be normalized.

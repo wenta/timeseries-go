@@ -160,6 +160,7 @@ median, _ := ts.Median()
 diffSeries := ts.Differentiate()
 integ := ts.Integrate()
 mv, _ := stats.GetMeanAndVariance(ts)
+acf, _ := stats.ACF(ts, 24)
 ```
 
 #### Decomposition (decompose)
