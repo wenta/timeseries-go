@@ -9,6 +9,7 @@ Planned work: see [todo.md](todo.md).
 ## Example programs
 
 ```bash
+go run ./examples/all
 go run ./examples
 go run ./examples/plotting
 go run ./examples/forecasting
@@ -19,6 +20,7 @@ go run ./examples/generators
 ```
 
 Shared example dataset: [examples/data/air_passengers.csv](examples/data/air_passengers.csv)
+Generated HTML reports are collected under [examples/out/index.html](examples/out/index.html).
 
 
 ## Common setup
@@ -161,6 +163,8 @@ diffSeries := ts.Differentiate()
 integ := ts.Integrate()
 mv, _ := stats.GetMeanAndVariance(ts)
 acf, _ := stats.ACF(ts, 24)
+lag1, _ := stats.Autocorrelation(ts, 1)
+comparison, _ := stats.CompareSeriesStats(ts, ts.MapValues(func(v float64) float64 { return v + 0.5 }))
 ```
 
 #### Decomposition (decompose)
@@ -234,10 +238,23 @@ index := generator.MakeSeriesIndex(base, time.Hour, 4)
 constant := generator.Constant(index, 5)
 walk := generator.RandomWalk(index, 10)
 noise := generator.RandomNoise(index, 0, 1)
+uniform := generator.UniformNoise(index, -1, 1)
+pulses := generator.PulseTrain(index, []generator.Pulse{{StartIndex: 1, Duration: 2, Amplitude: 3}})
+events := generator.PoissonEventIndices(100, 0.2)
+bootstrapped := generator.MovingBlockBootstrap(walk, index, 2)
+knn := generator.ResampleKNN(walk, index, 3, 2)
 
 patternIndex := generator.MakeSeriesIndex(base, time.Hour, 2)
 pattern := generator.Constant(patternIndex, 1)
 loop := generator.Repeat(pattern, base, base.Add(4*time.Hour))
+
+endUse := generator.EndUseEvents(base, base.Add(24*time.Hour), generator.EndUseConfig{
+	EventsPerDayMean: 3,
+	DurationMean:     10 * time.Minute,
+	IntensityMean:    0.2,
+})
+rendered := generator.RenderEvents(index, endUse)
+household := generator.HouseholdDemand(index, generator.HouseholdDemandConfig{Occupants: 3})
 ```
 
 #### Anomaly detection (anomaly)

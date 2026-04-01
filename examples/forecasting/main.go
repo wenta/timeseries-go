@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"path/filepath"
 	"time"
 
 	timeseriesgo "github.com/wenta/timeseries-go"
@@ -16,6 +15,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("output dir creation failed: %v", err)
 	}
+	report := exampleutil.NewReport("forecasting", "Forecasting Examples")
 
 	air, err := exampleutil.LoadCSVSeries("examples/data/air_passengers.csv", "2006-01-02", "air-passengers")
 	if err != nil {
@@ -81,32 +81,31 @@ func main() {
 	holtWinters := forecast.TripleExponentialSmoothing(seasonalSeries, 0.6, 0.3, 0.2, 4, 4)
 	holtWintersAnchored := exampleutil.AnchoredForecast(seasonalSeries, holtWinters)
 
-	saveChart(outDir, "air_forecast_comparison", "AirPassengers Forecast Comparison", []plot.Series{
+	saveChart(report, outDir, "air_forecast_comparison", "AirPassengers Forecast Comparison", []plot.Series{
 		{Label: "actual", Data: air, Color: plot.Gold},
 		{Label: "naive", Data: naiveAnchored, Color: plot.DarkOrange, Style: plot.LinePoints},
 		{Label: "ses", Data: sesAnchored, Color: plot.DeepSkyBlue, Style: plot.LinePoints},
 	}, plot.TimeFormat("2006"))
 
-	saveChart(outDir, "holt_comparison", "Holt Initialization Comparison", []plot.Series{
+	saveChart(report, outDir, "holt_comparison", "Holt Initialization Comparison", []plot.Series{
 		{Label: "trend", Data: trendSeries, Color: plot.Gold},
 		{Label: "holt", Data: holtAnchored, Color: plot.Cyan, Style: plot.LinePoints},
 		{Label: "holt estimated", Data: holtEstimatedAnchored, Color: plot.Chartreuse, Style: plot.LinePoints},
 	}, plot.TimeFormat("2006-01"))
 
-	saveChart(outDir, "holt_winters_additive", "Holt-Winters Additive Seasonal Forecast", []plot.Series{
+	saveChart(report, outDir, "holt_winters_additive", "Holt-Winters Additive Seasonal Forecast", []plot.Series{
 		{Label: "seasonal", Data: seasonalSeries, Color: plot.Gold},
 		{Label: "holt-winters", Data: holtWintersAnchored, Color: plot.DeepSkyBlue, Style: plot.LinePoints},
 	}, plot.TimeFormat("2006-01"))
 
+	if _, err := report.Write(outDir); err != nil {
+		log.Fatalf("report generation failed: %v", err)
+	}
 	exampleutil.PrintOutputDir(outDir)
 }
 
-func saveChart(outDir string, slug string, title string, series []plot.Series, opts ...plot.Option) {
-	if err := exampleutil.SaveAllFormats(
-		filepath.Join(outDir, slug),
-		series,
-		append([]plot.Option{plot.Title(title)}, opts...)...,
-	); err != nil {
+func saveChart(report *exampleutil.Report, outDir string, slug string, title string, series []plot.Series, opts ...plot.Option) {
+	if err := report.SaveChart(outDir, slug, title, series, opts...); err != nil {
 		log.Fatalf("%s plot failed: %v", slug, err)
 	}
 }

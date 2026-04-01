@@ -3,7 +3,6 @@ package main
 import (
 	"log"
 	"math"
-	"path/filepath"
 	"time"
 
 	timeseriesgo "github.com/wenta/timeseries-go"
@@ -18,6 +17,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("output dir creation failed: %v", err)
 	}
+	report := exampleutil.NewReport("decomposition", "Decomposition Examples")
 
 	air, err := exampleutil.LoadCSVSeries("examples/data/air_passengers.csv", "2006-01-02", "air-passengers")
 	if err != nil {
@@ -38,18 +38,18 @@ func main() {
 		log.Fatalf("stl decomposition failed: %v", err)
 	}
 
-	mustSave(outDir, "classical_trend", "Classical Decomposition: Observed vs Trend", []plot.Series{
+	mustSave(report, outDir, "classical_trend", "Classical Decomposition: Observed vs Trend", []plot.Series{
 		{Label: "log observed", Data: logAir, Color: plot.Gold},
 		{Label: "trend", Data: classical.Trend, Color: plot.DeepSkyBlue, Style: plot.LinePoints},
 	})
-	mustSave(outDir, "stl_trend", "STL: Observed vs Trend", []plot.Series{
+	mustSave(report, outDir, "stl_trend", "STL: Observed vs Trend", []plot.Series{
 		{Label: "log observed", Data: logAir, Color: plot.Gold},
 		{Label: "trend", Data: stlResult.Trend, Color: plot.DeepSkyBlue, Style: plot.LinePoints},
 	})
-	mustSave(outDir, "stl_seasonal", "STL Seasonal Component", []plot.Series{
+	mustSave(report, outDir, "stl_seasonal", "STL Seasonal Component", []plot.Series{
 		{Label: "seasonal", Data: stlResult.Seasonal, Color: plot.LightSeaGreen, Style: plot.LinePoints},
 	})
-	mustSave(outDir, "stl_residual", "STL Residual Component", []plot.Series{
+	mustSave(report, outDir, "stl_residual", "STL Residual Component", []plot.Series{
 		{Label: "residual", Data: stlResult.Residual, Color: plot.Crimson, Style: plot.LinePoints},
 	})
 
@@ -79,30 +79,28 @@ func main() {
 		log.Fatalf("mstl decomposition failed: %v", err)
 	}
 
-	mustSave(outDir, "mstl_trend", "MSTL Trend", []plot.Series{
+	mustSave(report, outDir, "mstl_trend", "MSTL Trend", []plot.Series{
 		{Label: "observed", Data: hourlySeries, Color: plot.Gold},
 		{Label: "trend", Data: mstlResult.Trend, Color: plot.DeepSkyBlue, Style: plot.LinePoints},
 	})
-	mustSave(outDir, "mstl_daily", "MSTL Daily Seasonal Component", []plot.Series{
+	mustSave(report, outDir, "mstl_daily", "MSTL Daily Seasonal Component", []plot.Series{
 		{Label: "daily", Data: mstlResult.Seasonal[0].Series, Color: plot.LightSeaGreen, Style: plot.LinePoints},
 	})
-	mustSave(outDir, "mstl_weekly", "MSTL Weekly Seasonal Component", []plot.Series{
+	mustSave(report, outDir, "mstl_weekly", "MSTL Weekly Seasonal Component", []plot.Series{
 		{Label: "weekly", Data: mstlResult.Seasonal[1].Series, Color: plot.Orchid, Style: plot.LinePoints},
 	})
-	mustSave(outDir, "mstl_residual", "MSTL Residual", []plot.Series{
+	mustSave(report, outDir, "mstl_residual", "MSTL Residual", []plot.Series{
 		{Label: "residual", Data: mstlResult.Residual, Color: plot.Crimson, Style: plot.LinePoints},
 	})
 
+	if _, err := report.Write(outDir); err != nil {
+		log.Fatalf("report generation failed: %v", err)
+	}
 	exampleutil.PrintOutputDir(outDir)
 }
 
-func mustSave(outDir string, slug string, title string, series []plot.Series) {
-	if err := exampleutil.SaveAllFormats(
-		filepath.Join(outDir, slug),
-		series,
-		plot.Title(title),
-		plot.TimeFormat("2006"),
-	); err != nil {
+func mustSave(report *exampleutil.Report, outDir string, slug string, title string, series []plot.Series) {
+	if err := report.SaveChart(outDir, slug, title, series, plot.TimeFormat("2006")); err != nil {
 		log.Fatalf("%s plot failed: %v", slug, err)
 	}
 }
