@@ -113,58 +113,47 @@ func Correlation(ts1, ts2 timeseriesgo.TimeSeries) (float64, error) {
 
 	points1 := ts1.DataPoints()
 	points2 := ts2.DataPoints()
+	left := 0
+	right := 0
+	count := 0
+	meanX := 0.0
+	meanY := 0.0
+	sumSquaresX := 0.0
+	sumSquaresY := 0.0
+	sumProducts := 0.0
 
-	valueMap := make(map[int64]float64)
-	for _, p := range points1 {
-		valueMap[p.Timestamp.UnixNano()] = p.Value
-	}
+	for left < len(points1) && right < len(points2) {
+		switch points1[left].Timestamp.Compare(points2[right].Timestamp) {
+		case -1:
+			left++
+		case 1:
+			right++
+		default:
+			count++
+			x := points1[left].Value
+			y := points2[right].Value
+			deltaX := x - meanX
+			meanX += deltaX / float64(count)
+			deltaY := y - meanY
+			meanY += deltaY / float64(count)
 
-	var aligned1 []timeseriesgo.DataPoint
-	var aligned2 []timeseriesgo.DataPoint
+			sumSquaresX += deltaX * (x - meanX)
+			sumSquaresY += deltaY * (y - meanY)
+			sumProducts += deltaX * (y - meanY)
 
-	for _, p := range points2 {
-		if v, ok := valueMap[p.Timestamp.UnixNano()]; ok {
-			aligned1 = append(aligned1, timeseriesgo.DataPoint{
-				Timestamp: p.Timestamp,
-				Value:     v,
-			})
-			aligned2 = append(aligned2, p)
+			left++
+			right++
 		}
 	}
 
-	if len(aligned1) < 2 {
+	if count < 2 {
 		return 0, errors.New("not enough aligned points")
 	}
-
-	series1 := timeseriesgo.FromDataPoints(aligned1)
-	series2 := timeseriesgo.FromDataPoints(aligned2)
-
-	stats1, err := GetMeanAndVariance(series1)
-	if err != nil {
-		return 0, err
-	}
-
-	stats2, err := GetMeanAndVariance(series2)
-	if err != nil {
-		return 0, err
-	}
-
-	if stats1.SampleVariance == 0 || stats2.SampleVariance == 0 {
+	if sumSquaresX == 0 || sumSquaresY == 0 {
 		return 0, errors.New("zero variance in one of the series")
 	}
 
-	covariance := 0.0
-	for i := range aligned1 {
-		dx := aligned1[i].Value - stats1.Mean
-		dy := aligned2[i].Value - stats2.Mean
-		covariance += dx * dy
-	}
-
-	covariance /= float64(len(aligned1) - 1)
-
-	correlation := covariance / (math.Sqrt(stats1.SampleVariance) * math.Sqrt(stats2.SampleVariance))
-
-	return correlation, nil
+	return sumProducts / math.Sqrt(sumSquaresX*sumSquaresY), nil
 }
 
 /**
