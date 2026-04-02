@@ -435,24 +435,26 @@ func (ts *TimeSeries) Step(delta time.Duration) TimeSeries {
 func (ts *TimeSeries) GroupByTime(g func(dt time.Time) time.Time, f func(dp []DataPoint) float64) TimeSeries {
 	if ts.IsEmpty() {
 		return Empty()
-	} else {
-		var grouped [][]DataPoint
-		for _, dp := range ts.datapoints {
-			groupedKey := g(dp.Timestamp)
-			idx, err := findIndexInGroup(grouped, groupedKey)
-			if err == nil {
-				grouped[idx] = append(grouped[idx], dp)
-			} else {
-				grouped = append(grouped, []DataPoint{dp})
-			}
-		}
-		var result []DataPoint
-		for _, group := range grouped {
-			result = append(result, DataPoint{Timestamp: g(group[0].Timestamp), Value: f(group)})
-
-		}
-		return TimeSeries{result, ts.label + " grouped"}
 	}
+
+	grouped := make(map[int64][]DataPoint)
+	order := make([]time.Time, 0)
+	for _, dp := range ts.datapoints {
+		groupedKey := g(dp.Timestamp)
+		key := groupedKey.UnixNano()
+		if _, exists := grouped[key]; !exists {
+			order = append(order, groupedKey)
+		}
+		grouped[key] = append(grouped[key], dp)
+	}
+
+	result := make([]DataPoint, 0, len(order))
+	for _, groupedKey := range order {
+		group := grouped[groupedKey.UnixNano()]
+		result = append(result, DataPoint{Timestamp: groupedKey, Value: f(group)})
+	}
+
+	return TimeSeries{result, ts.label + " grouped"}
 }
 
 /**
@@ -464,13 +466,33 @@ func (ts *TimeSeries) GroupByTime(g func(dt time.Time) time.Time, f func(dp []Da
  * @return A new TimeSeries containing one aggregated value per original datapoint.
  */
 func (ts TimeSeries) RollingWindow(window time.Duration, f func(vs []float64) float64) TimeSeries {
-	return ts.Map(func(dp DataPoint) DataPoint {
-		ws := ts.Filter(func(dp2 DataPoint) bool {
-			return (dp2.Timestamp.Before(dp.Timestamp) && dp2.Timestamp.After(dp.Timestamp.Add(-window))) || dp2.Timestamp.Equal(dp.Timestamp)
+	if ts.IsEmpty() {
+		return Empty()
+	}
+
+	result := EmptyLabeled(ts.label + " rolling")
+	result.datapoints = make([]DataPoint, 0, len(ts.datapoints))
+
+	left := 0
+	windowValues := make([]float64, 0, len(ts.datapoints))
+	for right, dp := range ts.datapoints {
+		cutoff := dp.Timestamp.Add(-window)
+		for left <= right && !ts.datapoints[left].Timestamp.After(cutoff) && !ts.datapoints[left].Timestamp.Equal(dp.Timestamp) {
+			left++
+		}
+
+		windowValues = windowValues[:0]
+		for i := left; i <= right; i++ {
+			windowValues = append(windowValues, ts.datapoints[i].Value)
+		}
+
+		result.AddPoint(DataPoint{
+			Timestamp: dp.Timestamp,
+			Value:     f(windowValues),
 		})
-		v := f(ws.Values())
-		return DataPoint{Timestamp: dp.Timestamp, Value: v}
-	})
+	}
+
+	return result
 }
 
 /**
