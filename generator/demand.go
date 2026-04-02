@@ -4,6 +4,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"slices"
+	"sort"
 	"time"
 
 	timeseriesgo "github.com/wenta/timeseries-go"
@@ -57,23 +58,31 @@ func RenderEvents(index []time.Time, events []DemandEvent) timeseriesgo.TimeSeri
 	}
 
 	values := make([]float64, len(index))
+	bucketEnds := make([]time.Time, len(index))
+	for i := range index {
+		end := bucketEnd(index, i)
+		bucketEnds[i] = end
+	}
+
 	for _, event := range events {
 		if event.Duration <= 0 {
 			continue
 		}
 
 		eventEnd := event.StartTime.Add(event.Duration)
-		for i, timestamp := range index {
-			bucketEnd := bucketEnd(index, i)
-			if !event.StartTime.Before(bucketEnd) || !timestamp.Before(eventEnd) {
+		startIndex := sort.Search(len(bucketEnds), func(i int) bool {
+			return bucketEnds[i].After(event.StartTime)
+		})
+		for i := startIndex; i < len(index) && index[i].Before(eventEnd); i++ {
+			bucketWidth := bucketEnds[i].Sub(index[i])
+			if bucketWidth <= 0 {
 				continue
 			}
 
-			overlapStart := maxTime(timestamp, event.StartTime)
-			overlapEnd := minTime(bucketEnd, eventEnd)
+			overlapStart := maxTime(index[i], event.StartTime)
+			overlapEnd := minTime(bucketEnds[i], eventEnd)
 			overlap := overlapEnd.Sub(overlapStart)
-			bucketWidth := bucketEnd.Sub(timestamp)
-			if overlap > 0 && bucketWidth > 0 {
+			if overlap > 0 {
 				values[i] += event.Intensity * overlap.Seconds() / bucketWidth.Seconds()
 			}
 		}
