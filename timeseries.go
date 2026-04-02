@@ -74,9 +74,9 @@ func (ts *TimeSeries) Length() int {
  * @return A slice of float64 values in series order.
  */
 func (ts *TimeSeries) Values() []float64 {
-	var res []float64
-	for _, dp := range ts.datapoints {
-		res = append(res, dp.Value)
+	res := make([]float64, len(ts.datapoints))
+	for i, dp := range ts.datapoints {
+		res[i] = dp.Value
 	}
 	return res
 }
@@ -87,9 +87,9 @@ func (ts *TimeSeries) Values() []float64 {
  * @return A slice of timestamps in series order.
  */
 func (ts *TimeSeries) Timestamps() []time.Time {
-	var res []time.Time
-	for _, dp := range ts.datapoints {
-		res = append(res, dp.Timestamp)
+	res := make([]time.Time, len(ts.datapoints))
+	for i, dp := range ts.datapoints {
+		res[i] = dp.Timestamp
 	}
 	return res
 }
@@ -775,22 +775,20 @@ func (ts *TimeSeries) Percentile(p int) (float64, error) {
  * @return A new TimeSeries with one datapoint per consecutive difference.
  */
 func (ts *TimeSeries) Differentiate() TimeSeries {
-	result := Empty()
 	if ts.Length() < 2 {
-		return result
+		return Empty()
 	}
 
-	prev, _ := ts.Head()
-
-	tail := ts.Tail()
-
-	for _, dp := range tail.datapoints {
-		result.AddPoint(DataPoint{dp.Timestamp, dp.Value - prev.Value})
+	result := EmptyLabeled(ts.label + " differentiated")
+	result.datapoints = make([]DataPoint, 0, len(ts.datapoints)-1)
+	prev := ts.datapoints[0]
+	for i := 1; i < len(ts.datapoints); i++ {
+		dp := ts.datapoints[i]
+		result.AddPoint(DataPoint{Timestamp: dp.Timestamp, Value: dp.Value - prev.Value})
 		prev = dp
 	}
 
 	return result
-
 }
 
 /**
@@ -799,23 +797,20 @@ func (ts *TimeSeries) Differentiate() TimeSeries {
  * @return A new TimeSeries with one datapoint per pairwise sum.
  */
 func (ts *TimeSeries) Integrate() TimeSeries {
-	result := Empty()
-
 	if ts.Length() < 2 {
-		return result
+		return Empty()
 	}
 
+	result := EmptyLabeled(ts.label + " integrated")
+	result.datapoints = make([]DataPoint, 0, len(ts.datapoints)-1)
 	prev := ts.datapoints[0]
-
-	tail := ts.Tail()
-
-	for _, dp := range tail.datapoints {
-		result.AddPoint(DataPoint{dp.Timestamp, dp.Value + prev.Value})
+	for i := 1; i < len(ts.datapoints); i++ {
+		dp := ts.datapoints[i]
+		result.AddPoint(DataPoint{Timestamp: dp.Timestamp, Value: dp.Value + prev.Value})
 		prev = dp
 	}
 
 	return result
-
 }
 
 /**
