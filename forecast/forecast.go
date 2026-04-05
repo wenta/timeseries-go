@@ -18,24 +18,15 @@ func Naive(ts timeseriesgo.TimeSeries, forecastHorizon int) timeseriesgo.TimeSer
 	if ts.IsEmpty() || forecastHorizon <= 0 {
 		return timeseriesgo.Empty()
 	}
-	lastPoint, err := ts.Last()
-	if err != nil {
-		return timeseriesgo.Empty()
-	}
-	forecastSeries := timeseriesgo.Empty()
 	points := ts.DataPoints()
 	if len(points) < 2 {
-		return forecastSeries
+		return timeseriesgo.Empty()
 	}
+	lastPoint := points[len(points)-1]
 	interval := points[1].Timestamp.Sub(points[0].Timestamp)
-	for i := 1; i <= forecastHorizon; i++ {
-		forecastTime := lastPoint.Timestamp.Add(time.Duration(i) * interval)
-		forecastSeries.AddPoint(timeseriesgo.DataPoint{
-			Timestamp: forecastTime,
-			Value:     lastPoint.Value,
-		})
-	}
-	return forecastSeries
+	return buildForecastSeries(lastPoint.Timestamp, interval, forecastHorizon, func(int) float64 {
+		return lastPoint.Value
+	})
 }
 
 /**
@@ -64,17 +55,11 @@ func SimpleExponentialSmoothing(ts timeseriesgo.TimeSeries, alpha float64, forec
 	}
 
 	// Generate forecasted points.
-	forecastSeries := timeseriesgo.Empty()
-	lastPoint, _ := ts.Last()
+	lastPoint := points[len(points)-1]
 	interval := points[1].Timestamp.Sub(points[0].Timestamp)
-	for i := 1; i <= forecastHorizon; i++ {
-		forecastTime := lastPoint.Timestamp.Add(time.Duration(i) * interval)
-		forecastSeries.AddPoint(timeseriesgo.DataPoint{
-			Timestamp: forecastTime,
-			Value:     smoothedValue,
-		})
-	}
-	return forecastSeries
+	return buildForecastSeries(lastPoint.Timestamp, interval, forecastHorizon, func(int) float64 {
+		return smoothedValue
+	})
 }
 
 /**
@@ -163,19 +148,12 @@ func TripleExponentialSmoothing(ts timeseriesgo.TimeSeries, alpha float64, beta 
 		seasonals[i%seasonLength] = gamma*(points[i].Value-level) + (1-gamma)*seasonal
 	}
 
-	forecastSeries := timeseriesgo.Empty()
 	lastPoint := points[len(points)-1]
 	interval := points[1].Timestamp.Sub(points[0].Timestamp)
-	for i := 1; i <= forecastHorizon; i++ {
-		seasonal := seasonals[(len(points)+i-1)%seasonLength]
-		forecastTime := lastPoint.Timestamp.Add(time.Duration(i) * interval)
-		forecastSeries.AddPoint(timeseriesgo.DataPoint{
-			Timestamp: forecastTime,
-			Value:     level + float64(i)*trend + seasonal,
-		})
-	}
-
-	return forecastSeries
+	return buildForecastSeries(lastPoint.Timestamp, interval, forecastHorizon, func(step int) float64 {
+		seasonal := seasonals[(len(points)+step-1)%seasonLength]
+		return level + float64(step)*trend + seasonal
+	})
 }
 
 func doubleExponentialSmoothingWithInitialization(points []timeseriesgo.DataPoint, alpha float64, beta float64, forecastHorizon int, level float64, trend float64, startIndex int) timeseriesgo.TimeSeries {
@@ -185,18 +163,11 @@ func doubleExponentialSmoothingWithInitialization(points []timeseriesgo.DataPoin
 		trend = beta*(level-prevLevel) + (1-beta)*trend
 	}
 
-	forecastSeries := timeseriesgo.Empty()
 	lastPoint := points[len(points)-1]
 	interval := points[1].Timestamp.Sub(points[0].Timestamp)
-	for i := 1; i <= forecastHorizon; i++ {
-		forecastTime := lastPoint.Timestamp.Add(time.Duration(i) * interval)
-		forecastSeries.AddPoint(timeseriesgo.DataPoint{
-			Timestamp: forecastTime,
-			Value:     level + float64(i)*trend,
-		})
-	}
-
-	return forecastSeries
+	return buildForecastSeries(lastPoint.Timestamp, interval, forecastHorizon, func(step int) float64 {
+		return level + float64(step)*trend
+	})
 }
 
 func estimateHoltInitialLevelTrend(points []timeseriesgo.DataPoint) (float64, float64) {
@@ -251,4 +222,15 @@ func mean(points []timeseriesgo.DataPoint) float64 {
 		sum += point.Value
 	}
 	return sum / float64(len(points))
+}
+
+func buildForecastSeries(start time.Time, interval time.Duration, horizon int, valueAtStep func(step int) float64) timeseriesgo.TimeSeries {
+	points := make([]timeseriesgo.DataPoint, horizon)
+	for i := 0; i < horizon; i++ {
+		points[i] = timeseriesgo.DataPoint{
+			Timestamp: start.Add(time.Duration(i+1) * interval),
+			Value:     valueAtStep(i + 1),
+		}
+	}
+	return timeseriesgo.FromDataPoints(points)
 }

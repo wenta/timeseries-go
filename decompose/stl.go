@@ -70,18 +70,29 @@ func STL(ts timeseriesgo.TimeSeries, config STLConfig) (DecomposeResult, error) 
 	trend := initial.Trend.Values()
 	seasonal := initial.Seasonal.Values()
 	residual := make([]float64, len(values))
-	robustWeights := ones(len(values))
+	detrended := make([]float64, len(values))
+	deseasonalized := make([]float64, len(values))
+	lowPassWork1 := make([]float64, len(values))
+	lowPassWork2 := make([]float64, len(values))
+	lowPassWork3 := make([]float64, len(values))
+	seasonalFilter := seasonalKernel(cfg.Period)
+	threePointFilter := []float64{1.0 / 3, 1.0 / 3, 1.0 / 3}
+	var robustWeights []float64
+	if cfg.Robust {
+		robustWeights = ones(len(values))
+	}
 
 	for outer := 0; outer <= cfg.OuterIterations; outer++ {
 		for inner := 0; inner < cfg.InnerIterations; inner++ {
-			detrended := subtract(values, trend)
+			subtractInto(detrended, values, trend)
 			subseriesSmooth := smoothSeasonalSubseries(detrended, robustWeights, cfg.Period, cfg.Seasonal)
-			lowPass := stlLowPass(subseriesSmooth, cfg.Period, cfg.LowPass, robustWeights)
-			seasonal = subtract(subseriesSmooth, lowPass)
-			trend = loessSmooth(subtract(values, seasonal), cfg.Trend, robustWeights)
+			lowPass := stlLowPass(subseriesSmooth, cfg.LowPass, robustWeights, seasonalFilter, threePointFilter, lowPassWork1, lowPassWork2, lowPassWork3)
+			subtractInto(seasonal, subseriesSmooth, lowPass)
+			subtractInto(deseasonalized, values, seasonal)
+			trend = loessSmooth(deseasonalized, cfg.Trend, robustWeights)
 		}
 
-		residual = subtract(subtract(values, trend), seasonal)
+		subtract3Into(residual, values, trend, seasonal)
 		if !cfg.Robust || outer == cfg.OuterIterations {
 			break
 		}
@@ -144,13 +155,22 @@ func smoothSeasonalSubseries(values []float64, robustWeights []float64, period i
 	seasonal := make([]float64, len(values))
 
 	for offset := 0; offset < period; offset++ {
-		subseriesValues := make([]float64, 0)
-		subseriesWeights := make([]float64, 0)
-		indices := make([]int, 0)
+		subseriesLength := (len(values) - offset + period - 1) / period
+		if subseriesLength < 0 {
+			subseriesLength = 0
+		}
+		subseriesValues := make([]float64, 0, subseriesLength)
+		indices := make([]int, 0, subseriesLength)
+		var subseriesWeights []float64
+		if robustWeights != nil {
+			subseriesWeights = make([]float64, 0, subseriesLength)
+		}
 
 		for idx := offset; idx < len(values); idx += period {
 			subseriesValues = append(subseriesValues, values[idx])
-			subseriesWeights = append(subseriesWeights, robustWeights[idx])
+			if robustWeights != nil {
+				subseriesWeights = append(subseriesWeights, robustWeights[idx])
+			}
 			indices = append(indices, idx)
 		}
 
@@ -163,17 +183,25 @@ func smoothSeasonalSubseries(values []float64, robustWeights []float64, period i
 	return seasonal
 }
 
-func stlLowPass(values []float64, period int, lowPassWindow int, robustWeights []float64) []float64 {
-	first := extrapolateMissingTrend(centeredMovingAverageValues(values, seasonalKernel(period)))
-	second := extrapolateMissingTrend(centeredMovingAverageValues(first, seasonalKernel(period)))
-	third := extrapolateMissingTrend(centeredMovingAverageValues(second, []float64{1.0 / 3, 1.0 / 3, 1.0 / 3}))
-	return loessSmooth(third, lowPassWindow, robustWeights)
+func stlLowPass(values []float64, lowPassWindow int, robustWeights []float64, seasonalFilter []float64, threePointFilter []float64, work1 []float64, work2 []float64, work3 []float64) []float64 {
+	centeredMovingAverageInto(work1, values, seasonalFilter)
+	extrapolateMissingTrendInPlace(work1)
+	centeredMovingAverageInto(work2, work1, seasonalFilter)
+	extrapolateMissingTrendInPlace(work2)
+	centeredMovingAverageInto(work3, work2, threePointFilter)
+	extrapolateMissingTrendInPlace(work3)
+	return loessSmooth(work3, lowPassWindow, robustWeights)
 }
 
 func centeredMovingAverageValues(values []float64, kernel []float64) []float64 {
 	result := make([]float64, len(values))
-	for i := range result {
-		result[i] = math.NaN()
+	centeredMovingAverageInto(result, values, kernel)
+	return result
+}
+
+func centeredMovingAverageInto(dst []float64, values []float64, kernel []float64) {
+	for i := range dst {
+		dst[i] = math.NaN()
 	}
 
 	half := len(kernel) / 2
@@ -182,10 +210,8 @@ func centeredMovingAverageValues(values []float64, kernel []float64) []float64 {
 		for k, weight := range kernel {
 			sum += weight * values[center-half+k]
 		}
-		result[center] = sum
+		dst[center] = sum
 	}
-
-	return result
 }
 
 func loessSmooth(values []float64, window int, robustWeights []float64) []float64 {
@@ -322,22 +348,76 @@ func median(values []float64) float64 {
 }
 
 func valuesToSeries(points []timeseriesgo.DataPoint, values []float64) timeseriesgo.TimeSeries {
-	result := timeseriesgo.Empty()
+	result := make([]timeseriesgo.DataPoint, len(points))
 	for i, point := range points {
-		result.AddPoint(timeseriesgo.DataPoint{
+		result[i] = timeseriesgo.DataPoint{
 			Timestamp: point.Timestamp,
 			Value:     values[i],
-		})
+		}
 	}
-	return result
+	return timeseriesgo.FromDataPoints(result)
 }
 
 func subtract(left []float64, right []float64) []float64 {
 	result := make([]float64, len(left))
-	for i := range left {
-		result[i] = left[i] - right[i]
-	}
+	subtractInto(result, left, right)
 	return result
+}
+
+func subtractInto(dst []float64, left []float64, right []float64) {
+	for i := range left {
+		dst[i] = left[i] - right[i]
+	}
+}
+
+func subtract3Into(dst []float64, source []float64, subtractA []float64, subtractB []float64) {
+	for i := range source {
+		dst[i] = source[i] - subtractA[i] - subtractB[i]
+	}
+}
+
+func extrapolateMissingTrendInPlace(trend []float64) {
+	firstValid := -1
+	secondValid := -1
+	lastValid := -1
+	previousValid := -1
+
+	for i, value := range trend {
+		if math.IsNaN(value) {
+			continue
+		}
+		if firstValid == -1 {
+			firstValid = i
+		} else if secondValid == -1 {
+			secondValid = i
+		}
+		previousValid = lastValid
+		lastValid = i
+	}
+
+	if firstValid == -1 {
+		return
+	}
+
+	if secondValid == -1 {
+		for i := range trend {
+			trend[i] = trend[firstValid]
+		}
+		return
+	}
+
+	leftSlope := (trend[secondValid] - trend[firstValid]) / float64(secondValid-firstValid)
+	for i := firstValid - 1; i >= 0; i-- {
+		trend[i] = trend[firstValid] - leftSlope*float64(firstValid-i)
+	}
+
+	if previousValid == -1 {
+		previousValid = firstValid
+	}
+	rightSlope := (trend[lastValid] - trend[previousValid]) / float64(lastValid-previousValid)
+	for i := lastValid + 1; i < len(trend); i++ {
+		trend[i] = trend[lastValid] + rightSlope*float64(i-lastValid)
+	}
 }
 
 func ones(n int) []float64 {

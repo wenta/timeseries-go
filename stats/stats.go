@@ -38,16 +38,24 @@ func GetMeanAndVariance(ts timeseriesgo.TimeSeries) (MeanAndVariance, error) {
 		return MeanAndVariance{}, errors.New("TimeSeries is empty")
 	}
 
-	mean := ts.Sum() / float64(ts.Length())
-	sampleVariance := 0.0
-	for _, v := range ts.Values() {
-		diff := v - mean
-		sampleVariance += diff * diff
+	values := ts.Values()
+	count := len(values)
+	sum := 0.0
+	for _, value := range values {
+		sum += value
 	}
-	populationVariance := sampleVariance / float64(ts.Length())
-	// Use sample variance (divide by n-1) to avoid underestimating stddev on small samples.
-	if ts.Length() > 1 {
-		sampleVariance /= float64(ts.Length() - 1)
+
+	mean := sum / float64(count)
+	sumSquares := 0.0
+	for _, value := range values {
+		diff := value - mean
+		sumSquares += diff * diff
+	}
+
+	populationVariance := sumSquares / float64(count)
+	sampleVariance := sumSquares
+	if count > 1 {
+		sampleVariance /= float64(count - 1)
 	}
 	return MeanAndVariance{
 		Mean:               mean,

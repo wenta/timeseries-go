@@ -5,7 +5,6 @@ import (
 	"math"
 
 	timeseriesgo "github.com/wenta/timeseries-go"
-	"github.com/wenta/timeseries-go/stats"
 )
 
 /**
@@ -20,20 +19,8 @@ func ZScore(ts timeseriesgo.TimeSeries) (timeseriesgo.TimeSeries, error) {
 		return timeseriesgo.Empty(), nil
 	}
 
-	mv, err := stats.GetMeanAndVariance(ts)
-	if err != nil {
-		return timeseriesgo.Empty(), err
-	}
-	mean := mv.Mean
-	stddev := math.Sqrt(mv.SampleVariance)
-	zscored := timeseriesgo.Empty()
-	for _, dp := range ts.DataPoints() {
-		zscored.AddPoint(timeseriesgo.DataPoint{
-			Timestamp: dp.Timestamp,
-			Value:     (dp.Value - mean) / stddev,
-		})
-	}
-	return zscored, nil
+	points := ts.DataPoints()
+	return zScoreSeries(points)
 }
 
 /**
@@ -44,18 +31,12 @@ func ZScore(ts timeseriesgo.TimeSeries) (timeseriesgo.TimeSeries, error) {
  * @return A new TimeSeries with 1 for anomalous points and 0 for normal points, or an error if the calculation fails.
  */
 func FindAnomaliesWithZScore(ts timeseriesgo.TimeSeries) (timeseriesgo.TimeSeries, error) {
-	rs, err := ZScore(ts)
-	if err != nil {
-		return timeseriesgo.Empty(), err
-	} else {
-		return rs.MapValues(func(x float64) float64 {
-			if math.Abs(x) > 2 {
-				return 1
-			} else {
-				return 0
-			}
-		}), nil
+	if ts.IsEmpty() {
+		return timeseriesgo.Empty(), nil
 	}
+
+	points := ts.DataPoints()
+	return zScoreFlags(points, 2)
 }
 
 /**
@@ -68,23 +49,10 @@ func FindAnomaliesWithZScore(ts timeseriesgo.TimeSeries) (timeseriesgo.TimeSerie
 func RobustZScore(ts timeseriesgo.TimeSeries) (timeseriesgo.TimeSeries, error) {
 	if ts.IsEmpty() {
 		return timeseriesgo.Empty(), errors.New("timeseries is empty")
-	} else {
-		median, err := ts.Median()
-		if err != nil {
-			return timeseriesgo.Empty(), err
-		}
-		deviations := ts.MapValues(func(x float64) float64 {
-			return math.Abs(x - median)
-		})
-		mad, err2 := deviations.Median()
-		if err2 != nil {
-			return timeseriesgo.Empty(), err
-		}
-		scaledMAD := mad * 1.4826
-		return ts.MapValues(func(x float64) float64 {
-			return (x - median) / scaledMAD
-		}), nil
 	}
+
+	points := ts.DataPoints()
+	return robustZScoreSeries(points)
 }
 
 /**
@@ -95,18 +63,12 @@ func RobustZScore(ts timeseriesgo.TimeSeries) (timeseriesgo.TimeSeries, error) {
  * @return A new TimeSeries with 1 for anomalous points and 0 for normal points, or an error if the calculation fails.
  */
 func FindAnomaliesWithRobustZScore(ts timeseriesgo.TimeSeries) (timeseriesgo.TimeSeries, error) {
-	rs, err := RobustZScore(ts)
-	if err != nil {
-		return timeseriesgo.Empty(), err
-	} else {
-		return rs.MapValues(func(x float64) float64 {
-			if math.Abs(x) > 3 {
-				return 1
-			} else {
-				return 0
-			}
-		}), nil
+	if ts.IsEmpty() {
+		return timeseriesgo.Empty(), errors.New("timeseries is empty")
 	}
+
+	points := ts.DataPoints()
+	return robustZScoreFlags(points, 3)
 }
 
 /**
@@ -134,15 +96,7 @@ func FindSpikeAnomalies(ts timeseriesgo.TimeSeries, threshold float64) (timeseri
 			flags[i] = 1
 		}
 	}
-
-	res := timeseriesgo.Empty()
-	for i, dp := range points {
-		res.AddPoint(timeseriesgo.DataPoint{
-			Timestamp: dp.Timestamp,
-			Value:     flags[i],
-		})
-	}
-	return res, nil
+	return seriesFromValues(points, flags), nil
 }
 
 /**
@@ -169,15 +123,7 @@ func FindDropAnomalies(ts timeseriesgo.TimeSeries, threshold float64) (timeserie
 			flags[i] = 1
 		}
 	}
-
-	res := timeseriesgo.Empty()
-	for i, dp := range points {
-		res.AddPoint(timeseriesgo.DataPoint{
-			Timestamp: dp.Timestamp,
-			Value:     flags[i],
-		})
-	}
-	return res, nil
+	return seriesFromValues(points, flags), nil
 }
 
 /**
@@ -225,13 +171,134 @@ func FindFlatlineAnomalies(ts timeseriesgo.TimeSeries, tolerance float64, minLen
 			flags[j] = 1
 		}
 	}
+	return seriesFromValues(points, flags), nil
+}
 
-	res := timeseriesgo.Empty()
+func zScoreSeries(points []timeseriesgo.DataPoint) (timeseriesgo.TimeSeries, error) {
+	mean, sampleVariance := meanAndSampleVariance(points)
+	stddev := math.Sqrt(sampleVariance)
+	values := make([]float64, len(points))
 	for i, dp := range points {
-		res.AddPoint(timeseriesgo.DataPoint{
-			Timestamp: dp.Timestamp,
-			Value:     flags[i],
-		})
+		values[i] = (dp.Value - mean) / stddev
 	}
-	return res, nil
+	return seriesFromValues(points, values), nil
+}
+
+func zScoreFlags(points []timeseriesgo.DataPoint, threshold float64) (timeseriesgo.TimeSeries, error) {
+	mean, sampleVariance := meanAndSampleVariance(points)
+	stddev := math.Sqrt(sampleVariance)
+	flags := make([]float64, len(points))
+	for i, dp := range points {
+		if math.Abs((dp.Value-mean)/stddev) > threshold {
+			flags[i] = 1
+		}
+	}
+	return seriesFromValues(points, flags), nil
+}
+
+func robustZScoreSeries(points []timeseriesgo.DataPoint) (timeseriesgo.TimeSeries, error) {
+	median, err := pointMedian(points)
+	if err != nil {
+		return timeseriesgo.Empty(), err
+	}
+
+	deviations := make([]float64, len(points))
+	for i, dp := range points {
+		deviations[i] = math.Abs(dp.Value - median)
+	}
+
+	mad, err := medianFromValues(deviations)
+	if err != nil {
+		return timeseriesgo.Empty(), err
+	}
+
+	scaledMAD := mad * 1.4826
+	values := make([]float64, len(points))
+	for i, dp := range points {
+		values[i] = (dp.Value - median) / scaledMAD
+	}
+	return seriesFromValues(points, values), nil
+}
+
+func robustZScoreFlags(points []timeseriesgo.DataPoint, threshold float64) (timeseriesgo.TimeSeries, error) {
+	median, err := pointMedian(points)
+	if err != nil {
+		return timeseriesgo.Empty(), err
+	}
+
+	deviations := make([]float64, len(points))
+	for i, dp := range points {
+		deviations[i] = math.Abs(dp.Value - median)
+	}
+
+	mad, err := medianFromValues(deviations)
+	if err != nil {
+		return timeseriesgo.Empty(), err
+	}
+
+	scaledMAD := mad * 1.4826
+	flags := make([]float64, len(points))
+	for i, dp := range points {
+		if math.Abs((dp.Value-median)/scaledMAD) > threshold {
+			flags[i] = 1
+		}
+	}
+	return seriesFromValues(points, flags), nil
+}
+
+func meanAndSampleVariance(points []timeseriesgo.DataPoint) (float64, float64) {
+	sum := 0.0
+	for _, point := range points {
+		sum += point.Value
+	}
+
+	mean := sum / float64(len(points))
+	sumSquares := 0.0
+	for _, point := range points {
+		diff := point.Value - mean
+		sumSquares += diff * diff
+	}
+
+	if len(points) == 1 {
+		return mean, sumSquares
+	}
+	return mean, sumSquares / float64(len(points)-1)
+}
+
+func pointMedian(points []timeseriesgo.DataPoint) (float64, error) {
+	values := make([]float64, len(points))
+	for i, dp := range points {
+		values[i] = dp.Value
+	}
+	return medianFromValues(values)
+}
+
+func medianFromValues(values []float64) (float64, error) {
+	if len(values) == 0 {
+		return 0, errors.New("timeseries is empty")
+	}
+
+	position := float64(50*(len(values)+1)) / 100
+	if position < 1 {
+		return values[0], nil
+	}
+	if position >= float64(len(values)) {
+		return values[len(values)-1], nil
+	}
+
+	lowerIndex := int(math.Floor(position)) - 1
+	upperIndex := lowerIndex + 1
+	fraction := position - math.Floor(position)
+	return values[lowerIndex] + fraction*(values[upperIndex]-values[lowerIndex]), nil
+}
+
+func seriesFromValues(points []timeseriesgo.DataPoint, values []float64) timeseriesgo.TimeSeries {
+	result := make([]timeseriesgo.DataPoint, len(points))
+	for i, dp := range points {
+		result[i] = timeseriesgo.DataPoint{
+			Timestamp: dp.Timestamp,
+			Value:     values[i],
+		}
+	}
+	return timeseriesgo.FromDataPoints(result)
 }
