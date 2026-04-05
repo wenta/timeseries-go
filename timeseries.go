@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"time"
 )
 
@@ -822,6 +823,337 @@ func (ts *TimeSeries) Median() (float64, error) {
 	return ts.Percentile(50)
 }
 
+/**
+ * Returns a lagged TimeSeries shifted backward by a fixed number of points.
+ *
+ * Lag(1) places the previous value at the current timestamp. The first
+ * `steps` timestamps are omitted because no lagged value exists for them.
+ *
+ * @param steps The number of points to lag the values by.
+ *
+ * @return A new TimeSeries with lagged values. If steps <= 0, returns a copy of the original series. If steps >= series length, returns an empty series.
+ */
+func (ts *TimeSeries) Lag(steps int) TimeSeries {
+	if ts.IsEmpty() {
+		return Empty()
+	}
+	if steps <= 0 {
+		return cloneSeries(ts)
+	}
+	if steps >= len(ts.datapoints) {
+		return EmptyLabeled(ts.label + " lagged")
+	}
+
+	result := make([]DataPoint, len(ts.datapoints)-steps)
+	for i := steps; i < len(ts.datapoints); i++ {
+		result[i-steps] = DataPoint{
+			Timestamp: ts.datapoints[i].Timestamp,
+			Value:     ts.datapoints[i-steps].Value,
+		}
+	}
+	return TimeSeries{datapoints: result, label: ts.label + " lagged"}
+}
+
+/**
+ * Returns a TimeSeries with all timestamps shifted by the provided duration.
+ *
+ * Values remain unchanged and relative spacing between datapoints is preserved.
+ *
+ * @param delta The duration added to every timestamp. Negative values shift the series backward in time.
+ *
+ * @return A new TimeSeries with shifted timestamps.
+ */
+func (ts *TimeSeries) Shift(delta time.Duration) TimeSeries {
+	if ts.IsEmpty() {
+		return Empty()
+	}
+
+	result := make([]DataPoint, len(ts.datapoints))
+	for i, dp := range ts.datapoints {
+		result[i] = DataPoint{
+			Timestamp: dp.Timestamp.Add(delta),
+			Value:     dp.Value,
+		}
+	}
+	return TimeSeries{datapoints: result, label: ts.label + " shifted"}
+}
+
+/**
+ * Returns the cumulative sum of the TimeSeries values.
+ *
+ * Each output point equals the sum of all values up to and including the
+ * current point. Timestamps are preserved.
+ *
+ * @return A new TimeSeries containing cumulative sums.
+ */
+func (ts *TimeSeries) CumulativeSum() TimeSeries {
+	if ts.IsEmpty() {
+		return Empty()
+	}
+
+	result := make([]DataPoint, len(ts.datapoints))
+	running := 0.0
+	for i, dp := range ts.datapoints {
+		running += dp.Value
+		result[i] = DataPoint{
+			Timestamp: dp.Timestamp,
+			Value:     running,
+		}
+	}
+	return TimeSeries{datapoints: result, label: ts.label + " cumulative sum"}
+}
+
+/**
+ * Returns the cumulative minimum of the TimeSeries values.
+ *
+ * Each output point equals the minimum value observed so far. Timestamps are preserved.
+ *
+ * @return A new TimeSeries containing cumulative minima.
+ */
+func (ts *TimeSeries) CumulativeMin() TimeSeries {
+	if ts.IsEmpty() {
+		return Empty()
+	}
+
+	result := make([]DataPoint, len(ts.datapoints))
+	currentMin := ts.datapoints[0].Value
+	for i, dp := range ts.datapoints {
+		if dp.Value < currentMin {
+			currentMin = dp.Value
+		}
+		result[i] = DataPoint{
+			Timestamp: dp.Timestamp,
+			Value:     currentMin,
+		}
+	}
+	return TimeSeries{datapoints: result, label: ts.label + " cumulative min"}
+}
+
+/**
+ * Returns the cumulative maximum of the TimeSeries values.
+ *
+ * Each output point equals the maximum value observed so far. Timestamps are preserved.
+ *
+ * @return A new TimeSeries containing cumulative maxima.
+ */
+func (ts *TimeSeries) CumulativeMax() TimeSeries {
+	if ts.IsEmpty() {
+		return Empty()
+	}
+
+	result := make([]DataPoint, len(ts.datapoints))
+	currentMax := ts.datapoints[0].Value
+	for i, dp := range ts.datapoints {
+		if dp.Value > currentMax {
+			currentMax = dp.Value
+		}
+		result[i] = DataPoint{
+			Timestamp: dp.Timestamp,
+			Value:     currentMax,
+		}
+	}
+	return TimeSeries{datapoints: result, label: ts.label + " cumulative max"}
+}
+
+/**
+ * Forward-fills the TimeSeries onto a regular timestamp grid.
+ *
+ * The output grid starts at the first timestamp and advances by `delta` until
+ * it reaches or passes the last timestamp. Original values are preserved on
+ * exact grid matches, and missing grid points use the most recent previous value.
+ *
+ * @param delta The spacing of the regular output grid.
+ *
+ * @return A new regularized TimeSeries using forward fill. If delta <= 0, returns a copy. Empty input returns empty.
+ */
+func (ts *TimeSeries) ForwardFill(delta time.Duration) TimeSeries {
+	return ts.fillRegular(delta, fillForward, 0)
+}
+
+/**
+ * Backward-fills the TimeSeries onto a regular timestamp grid.
+ *
+ * The output grid starts at the first timestamp and advances by `delta` until
+ * it reaches or passes the last timestamp. Original values are preserved on
+ * exact grid matches, and missing grid points use the next available value.
+ *
+ * @param delta The spacing of the regular output grid.
+ *
+ * @return A new regularized TimeSeries using backward fill. If delta <= 0, returns a copy. Empty input returns empty.
+ */
+func (ts *TimeSeries) BackwardFill(delta time.Duration) TimeSeries {
+	return ts.fillRegular(delta, fillBackward, 0)
+}
+
+/**
+ * Fills missing points on a regular timestamp grid using a default value.
+ *
+ * The output grid starts at the first timestamp and advances by `delta` until
+ * it reaches or passes the last timestamp. Original values are preserved on
+ * exact grid matches, while missing grid points are assigned `defaultValue`.
+ *
+ * @param delta The spacing of the regular output grid.
+ * @param defaultValue The value used for grid points that do not exist in the original series.
+ *
+ * @return A new regularized TimeSeries. If delta <= 0, returns a copy. Empty input returns empty.
+ */
+func (ts *TimeSeries) FillMissing(delta time.Duration, defaultValue float64) TimeSeries {
+	return ts.fillRegular(delta, fillConstant, defaultValue)
+}
+
+/**
+ * Checks whether the TimeSeries timestamps are sorted in non-decreasing order.
+ *
+ * Duplicate timestamps are allowed and still considered sorted.
+ *
+ * @return True if the timestamps are sorted in non-decreasing order, otherwise false.
+ */
+func (ts *TimeSeries) IsSorted() bool {
+	for i := 1; i < len(ts.datapoints); i++ {
+		if ts.datapoints[i].Timestamp.Before(ts.datapoints[i-1].Timestamp) {
+			return false
+		}
+	}
+	return true
+}
+
+/**
+ * Returns a copy of the TimeSeries sorted by timestamp.
+ *
+ * The sort is stable, so datapoints with equal timestamps preserve their original relative order.
+ *
+ * @return A new TimeSeries sorted by timestamp.
+ */
+func (ts *TimeSeries) SortByTimestamp() TimeSeries {
+	if ts.IsEmpty() {
+		return Empty()
+	}
+
+	sorted := ts.DataPoints()
+	slices.SortStableFunc(sorted, func(left DataPoint, right DataPoint) int {
+		return left.Timestamp.Compare(right.Timestamp)
+	})
+	return TimeSeries{datapoints: sorted, label: ts.label + " sorted"}
+}
+
+/**
+ * Checks whether the TimeSeries contains duplicate timestamps.
+ *
+ * @return True if at least two datapoints share the same timestamp, otherwise false.
+ */
+func (ts *TimeSeries) HasDuplicateTimestamps() bool {
+	if len(ts.datapoints) < 2 {
+		return false
+	}
+
+	seen := make(map[int64]struct{}, len(ts.datapoints))
+	for _, dp := range ts.datapoints {
+		key := dp.Timestamp.UnixNano()
+		if _, exists := seen[key]; exists {
+			return true
+		}
+		seen[key] = struct{}{}
+	}
+	return false
+}
+
+/**
+ * Checks whether the TimeSeries uses a regular positive interval between consecutive timestamps.
+ *
+ * Empty and single-point series are treated as regular.
+ *
+ * @return True if the series is sorted and all consecutive timestamp gaps are equal and positive, otherwise false.
+ */
+func (ts *TimeSeries) IsRegular() bool {
+	if len(ts.datapoints) < 2 {
+		return true
+	}
+
+	step := ts.datapoints[1].Timestamp.Sub(ts.datapoints[0].Timestamp)
+	if step <= 0 {
+		return false
+	}
+
+	for i := 2; i < len(ts.datapoints); i++ {
+		if ts.datapoints[i].Timestamp.Sub(ts.datapoints[i-1].Timestamp) != step {
+			return false
+		}
+	}
+	return true
+}
+
+/**
+ * Reindexes the TimeSeries onto an explicit target index using exact timestamp matches.
+ *
+ * For duplicate timestamps in the source series, the last matching datapoint is used.
+ * The output preserves the order of the provided index and always has the same length as `index`.
+ *
+ * @param index The target timestamps for the reindexed series.
+ * @param defaultValue The value used for timestamps that are missing in the source series.
+ *
+ * @return A new TimeSeries aligned to the provided index.
+ */
+func (ts *TimeSeries) Reindex(index []time.Time, defaultValue float64) TimeSeries {
+	if len(index) == 0 {
+		return Empty()
+	}
+
+	valueByTimestamp := make(map[int64]float64, len(ts.datapoints))
+	for _, dp := range ts.datapoints {
+		valueByTimestamp[dp.Timestamp.UnixNano()] = dp.Value
+	}
+
+	result := make([]DataPoint, len(index))
+	for i, timestamp := range index {
+		value := defaultValue
+		if exact, exists := valueByTimestamp[timestamp.UnixNano()]; exists {
+			value = exact
+		}
+		result[i] = DataPoint{
+			Timestamp: timestamp,
+			Value:     value,
+		}
+	}
+	return TimeSeries{datapoints: result, label: ts.label + " reindexed"}
+}
+
+/**
+ * Reindexes the TimeSeries using the nearest timestamp within a tolerance.
+ *
+ * Only target timestamps whose nearest source timestamp is within `tolerance`
+ * are included in the result. The output preserves the order of the provided index.
+ * For duplicate timestamps in the source series, the last matching datapoint is used.
+ *
+ * @param index The target timestamps to align to.
+ * @param tolerance The maximum allowed absolute timestamp difference for a match.
+ *
+ * @return A new TimeSeries containing only target timestamps that found a nearest match within tolerance. Negative tolerance returns an empty series.
+ */
+func (ts *TimeSeries) ReindexNearest(index []time.Time, tolerance time.Duration) TimeSeries {
+	if len(index) == 0 || tolerance < 0 || ts.IsEmpty() {
+		return Empty()
+	}
+
+	points := deduplicatedSortedPoints(ts.datapoints)
+	timestamps := make([]time.Time, len(points))
+	for i, point := range points {
+		timestamps[i] = point.Timestamp
+	}
+
+	result := make([]DataPoint, 0, len(index))
+	for _, target := range index {
+		candidate, ok := nearestPointWithinTolerance(points, timestamps, target, tolerance)
+		if !ok {
+			continue
+		}
+		result = append(result, DataPoint{
+			Timestamp: target,
+			Value:     candidate.Value,
+		})
+	}
+	return TimeSeries{datapoints: result, label: ts.label + " reindexed nearest"}
+}
+
 func findIndexInGroup(grouped [][]DataPoint, key time.Time) (int, error) {
 	for i, k := range grouped {
 		if len(k) == 0 {
@@ -832,4 +1164,209 @@ func findIndexInGroup(grouped [][]DataPoint, key time.Time) (int, error) {
 		}
 	}
 	return -1, errors.New("key not found in groups")
+}
+
+type fillMode int
+
+const (
+	fillForward fillMode = iota
+	fillBackward
+	fillConstant
+)
+
+func cloneSeries(ts *TimeSeries) TimeSeries {
+	return TimeSeries{
+		datapoints: ts.DataPoints(),
+		label:      ts.label,
+	}
+}
+
+func (ts *TimeSeries) fillRegular(delta time.Duration, mode fillMode, defaultValue float64) TimeSeries {
+	if ts.IsEmpty() {
+		return Empty()
+	}
+	if delta <= 0 {
+		return cloneSeries(ts)
+	}
+
+	points := deduplicatedSortedPoints(ts.datapoints)
+	if len(points) == 0 {
+		return Empty()
+	}
+
+	targets := regularGrid(points[0].Timestamp, points[len(points)-1].Timestamp, delta)
+	if len(targets) == 0 {
+		return Empty()
+	}
+
+	switch mode {
+	case fillBackward:
+		return backwardFillSeries(points, targets, ts.label+" backward filled")
+	case fillConstant:
+		return constantFillSeries(points, targets, defaultValue, ts.label+" filled")
+	default:
+		return forwardFillSeries(points, targets, ts.label+" forward filled")
+	}
+}
+
+func forwardFillSeries(points []DataPoint, targets []time.Time, label string) TimeSeries {
+	result := make([]DataPoint, 0, len(targets))
+	sourceIdx := 0
+	hasLast := false
+	lastValue := 0.0
+
+	for _, target := range targets {
+		for sourceIdx < len(points) && points[sourceIdx].Timestamp.Before(target) {
+			lastValue = points[sourceIdx].Value
+			hasLast = true
+			sourceIdx++
+		}
+
+		if sourceIdx < len(points) && points[sourceIdx].Timestamp.Equal(target) {
+			lastValue = points[sourceIdx].Value
+			hasLast = true
+			result = append(result, DataPoint{Timestamp: target, Value: lastValue})
+			sourceIdx++
+			continue
+		}
+
+		if hasLast {
+			result = append(result, DataPoint{Timestamp: target, Value: lastValue})
+		}
+	}
+
+	return TimeSeries{datapoints: result, label: label}
+}
+
+func backwardFillSeries(points []DataPoint, targets []time.Time, label string) TimeSeries {
+	result := make([]DataPoint, len(targets))
+	sourceIdx := len(points) - 1
+	hasNext := false
+	nextValue := 0.0
+
+	for i := len(targets) - 1; i >= 0; i-- {
+		target := targets[i]
+		for sourceIdx >= 0 && points[sourceIdx].Timestamp.After(target) {
+			nextValue = points[sourceIdx].Value
+			hasNext = true
+			sourceIdx--
+		}
+
+		if sourceIdx >= 0 && points[sourceIdx].Timestamp.Equal(target) {
+			nextValue = points[sourceIdx].Value
+			hasNext = true
+			result[i] = DataPoint{Timestamp: target, Value: nextValue}
+			sourceIdx--
+			continue
+		}
+
+		if hasNext {
+			result[i] = DataPoint{Timestamp: target, Value: nextValue}
+		}
+	}
+	return TimeSeries{datapoints: result, label: label}
+}
+
+func constantFillSeries(points []DataPoint, targets []time.Time, defaultValue float64, label string) TimeSeries {
+	result := make([]DataPoint, len(targets))
+	sourceIdx := 0
+
+	for i, target := range targets {
+		for sourceIdx < len(points) && points[sourceIdx].Timestamp.Before(target) {
+			sourceIdx++
+		}
+
+		value := defaultValue
+		if sourceIdx < len(points) && points[sourceIdx].Timestamp.Equal(target) {
+			value = points[sourceIdx].Value
+			sourceIdx++
+		}
+		result[i] = DataPoint{Timestamp: target, Value: value}
+	}
+
+	return TimeSeries{datapoints: result, label: label}
+}
+
+func regularGrid(start time.Time, end time.Time, delta time.Duration) []time.Time {
+	if delta <= 0 || end.Before(start) {
+		return nil
+	}
+
+	count := int(end.Sub(start)/delta) + 1
+	grid := make([]time.Time, count)
+	for i := range grid {
+		grid[i] = start.Add(time.Duration(i) * delta)
+	}
+	return grid
+}
+
+func deduplicatedSortedPoints(points []DataPoint) []DataPoint {
+	if len(points) == 0 {
+		return nil
+	}
+
+	working := make([]DataPoint, len(points))
+	copy(working, points)
+	if !isNonDecreasing(working) {
+		slices.SortStableFunc(working, func(left DataPoint, right DataPoint) int {
+			return left.Timestamp.Compare(right.Timestamp)
+		})
+	}
+
+	result := make([]DataPoint, 0, len(working))
+	for _, point := range working {
+		if len(result) > 0 && result[len(result)-1].Timestamp.Equal(point.Timestamp) {
+			result[len(result)-1] = point
+			continue
+		}
+		result = append(result, point)
+	}
+	return result
+}
+
+func nearestPointWithinTolerance(points []DataPoint, timestamps []time.Time, target time.Time, tolerance time.Duration) (DataPoint, bool) {
+	idx, found := slices.BinarySearchFunc(timestamps, target, func(left time.Time, right time.Time) int {
+		return left.Compare(right)
+	})
+	if found {
+		return points[idx], true
+	}
+
+	bestIdx := -1
+	bestDistance := tolerance + time.Nanosecond
+	if idx < len(points) {
+		distance := absDuration(points[idx].Timestamp.Sub(target))
+		if distance <= tolerance && distance < bestDistance {
+			bestDistance = distance
+			bestIdx = idx
+		}
+	}
+	if idx > 0 {
+		distance := absDuration(points[idx-1].Timestamp.Sub(target))
+		if distance <= tolerance && distance <= bestDistance {
+			bestDistance = distance
+			bestIdx = idx - 1
+		}
+	}
+
+	if bestIdx == -1 {
+		return DataPoint{}, false
+	}
+	return points[bestIdx], true
+}
+
+func isNonDecreasing(points []DataPoint) bool {
+	for i := 1; i < len(points); i++ {
+		if points[i].Timestamp.Before(points[i-1].Timestamp) {
+			return false
+		}
+	}
+	return true
+}
+
+func absDuration(value time.Duration) time.Duration {
+	if value < 0 {
+		return -value
+	}
+	return value
 }

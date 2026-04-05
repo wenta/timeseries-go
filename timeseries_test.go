@@ -673,3 +673,231 @@ func TestStepCarriesForward(t *testing.T) {
 		}
 	}
 }
+
+func TestLag(t *testing.T) {
+	ts := buildHourlySeries([]float64{10, 20, 30, 40})
+
+	lagged := ts.Lag(1)
+	expected := []float64{10, 20, 30}
+	if lagged.Length() != len(expected) {
+		t.Fatalf("expected lagged length %d, got %d", len(expected), lagged.Length())
+	}
+	for i, point := range lagged.DataPoints() {
+		if point.Value != expected[i] {
+			t.Fatalf("lagged value %d: expected %f, got %f", i, expected[i], point.Value)
+		}
+		if !point.Timestamp.Equal(ts.datapoints[i+1].Timestamp) {
+			t.Fatalf("lagged timestamp %d: expected %v, got %v", i, ts.datapoints[i+1].Timestamp, point.Timestamp)
+		}
+	}
+
+	if lagged := ts.Lag(0); lagged.Length() != ts.Length() {
+		t.Fatalf("expected zero lag to keep length %d, got %d", ts.Length(), lagged.Length())
+	}
+	if lagged := ts.Lag(10); !lagged.IsEmpty() {
+		t.Fatalf("expected large lag to return empty series, got length %d", lagged.Length())
+	}
+}
+
+func TestShift(t *testing.T) {
+	ts := buildHourlySeries([]float64{1, 2, 3})
+
+	shifted := ts.Shift(2 * time.Hour)
+	for i, point := range shifted.DataPoints() {
+		expected := ts.datapoints[i].Timestamp.Add(2 * time.Hour)
+		if !point.Timestamp.Equal(expected) {
+			t.Fatalf("shifted timestamp %d: expected %v, got %v", i, expected, point.Timestamp)
+		}
+		if point.Value != ts.datapoints[i].Value {
+			t.Fatalf("shifted value %d: expected %f, got %f", i, ts.datapoints[i].Value, point.Value)
+		}
+	}
+}
+
+func TestCumulativeTransforms(t *testing.T) {
+	ts := buildHourlySeries([]float64{3, -1, 5, 2})
+
+	assertSeriesValues(t, ts.CumulativeSum(), []float64{3, 2, 7, 9})
+	assertSeriesValues(t, ts.CumulativeMin(), []float64{3, -1, -1, -1})
+	assertSeriesValues(t, ts.CumulativeMax(), []float64{3, 3, 5, 5})
+}
+
+func TestFillHelpers(t *testing.T) {
+	base := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	ts := FromDataPoints([]DataPoint{
+		{Timestamp: base, Value: 1},
+		{Timestamp: base.Add(2 * time.Hour), Value: 3},
+		{Timestamp: base.Add(5 * time.Hour), Value: 5},
+	})
+
+	assertSeriesTimesAndValues(t, ts.ForwardFill(time.Hour), []time.Time{
+		base,
+		base.Add(1 * time.Hour),
+		base.Add(2 * time.Hour),
+		base.Add(3 * time.Hour),
+		base.Add(4 * time.Hour),
+		base.Add(5 * time.Hour),
+	}, []float64{1, 1, 3, 3, 3, 5})
+
+	assertSeriesTimesAndValues(t, ts.BackwardFill(time.Hour), []time.Time{
+		base,
+		base.Add(1 * time.Hour),
+		base.Add(2 * time.Hour),
+		base.Add(3 * time.Hour),
+		base.Add(4 * time.Hour),
+		base.Add(5 * time.Hour),
+	}, []float64{1, 3, 3, 5, 5, 5})
+
+	assertSeriesValues(t, ts.FillMissing(time.Hour, -1), []float64{1, -1, 3, -1, -1, 5})
+
+	if clone := ts.ForwardFill(0); clone.Length() != ts.Length() {
+		t.Fatalf("expected invalid delta to return copy, got length %d", clone.Length())
+	}
+}
+
+func TestForwardBackwardFillHandleUnsortedAndDuplicates(t *testing.T) {
+	base := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	ts := FromDataPoints([]DataPoint{
+		{Timestamp: base.Add(2 * time.Hour), Value: 2},
+		{Timestamp: base, Value: 1},
+		{Timestamp: base.Add(2 * time.Hour), Value: 4},
+		{Timestamp: base.Add(4 * time.Hour), Value: 8},
+	})
+
+	assertSeriesValues(t, ts.ForwardFill(2*time.Hour), []float64{1, 4, 8})
+	assertSeriesValues(t, ts.BackwardFill(2*time.Hour), []float64{1, 4, 8})
+}
+
+func TestSortednessAndRegularityHelpers(t *testing.T) {
+	base := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	sorted := FromDataPoints([]DataPoint{
+		{Timestamp: base, Value: 1},
+		{Timestamp: base.Add(time.Hour), Value: 2},
+		{Timestamp: base.Add(2 * time.Hour), Value: 3},
+	})
+	if !sorted.IsSorted() {
+		t.Fatal("expected sorted series to be sorted")
+	}
+	if !sorted.IsRegular() {
+		t.Fatal("expected sorted hourly series to be regular")
+	}
+
+	unsorted := FromDataPoints([]DataPoint{
+		{Timestamp: base.Add(time.Hour), Value: 2},
+		{Timestamp: base, Value: 1},
+	})
+	if unsorted.IsSorted() {
+		t.Fatal("expected unsorted series to be unsorted")
+	}
+	if unsorted.IsRegular() {
+		t.Fatal("expected unsorted series to be irregular")
+	}
+
+	duplicates := FromDataPoints([]DataPoint{
+		{Timestamp: base, Value: 1},
+		{Timestamp: base, Value: 2},
+	})
+	if !duplicates.HasDuplicateTimestamps() {
+		t.Fatal("expected duplicate timestamps to be detected")
+	}
+	if duplicates.IsRegular() {
+		t.Fatal("expected duplicate timestamps to be irregular")
+	}
+}
+
+func TestSortByTimestamp(t *testing.T) {
+	base := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	ts := FromDataPoints([]DataPoint{
+		{Timestamp: base.Add(2 * time.Hour), Value: 3},
+		{Timestamp: base, Value: 1},
+		{Timestamp: base.Add(time.Hour), Value: 2},
+	})
+
+	sorted := ts.SortByTimestamp()
+	assertSeriesValues(t, sorted, []float64{1, 2, 3})
+}
+
+func TestReindex(t *testing.T) {
+	base := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	ts := FromDataPoints([]DataPoint{
+		{Timestamp: base, Value: 1},
+		{Timestamp: base.Add(time.Hour), Value: 2},
+		{Timestamp: base.Add(time.Hour), Value: 4},
+		{Timestamp: base.Add(3 * time.Hour), Value: 6},
+	})
+
+	index := []time.Time{
+		base,
+		base.Add(time.Hour),
+		base.Add(2 * time.Hour),
+		base.Add(3 * time.Hour),
+	}
+	assertSeriesValues(t, ts.Reindex(index, -1), []float64{1, 4, -1, 6})
+}
+
+func TestReindexNearest(t *testing.T) {
+	base := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	ts := FromDataPoints([]DataPoint{
+		{Timestamp: base, Value: 1},
+		{Timestamp: base.Add(65 * time.Minute), Value: 2},
+		{Timestamp: base.Add(130 * time.Minute), Value: 3},
+	})
+
+	index := []time.Time{
+		base.Add(30 * time.Minute),
+		base.Add(60 * time.Minute),
+		base.Add(120 * time.Minute),
+		base.Add(4 * time.Hour),
+	}
+	reindexed := ts.ReindexNearest(index, 30*time.Minute)
+	assertSeriesTimesAndValues(t, reindexed, []time.Time{
+		base.Add(30 * time.Minute),
+		base.Add(60 * time.Minute),
+		base.Add(120 * time.Minute),
+	}, []float64{1, 2, 3})
+
+	if result := ts.ReindexNearest(index, -time.Minute); !result.IsEmpty() {
+		t.Fatalf("expected negative tolerance to return empty, got length %d", result.Length())
+	}
+}
+
+func buildHourlySeries(values []float64) TimeSeries {
+	base := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	points := make([]DataPoint, len(values))
+	for i, value := range values {
+		points[i] = DataPoint{
+			Timestamp: base.Add(time.Duration(i) * time.Hour),
+			Value:     value,
+		}
+	}
+	return FromDataPoints(points)
+}
+
+func assertSeriesValues(t *testing.T, ts TimeSeries, expected []float64) {
+	t.Helper()
+	points := ts.DataPoints()
+	if len(points) != len(expected) {
+		t.Fatalf("expected %d points, got %d", len(expected), len(points))
+	}
+	for i, point := range points {
+		if math.Abs(point.Value-expected[i]) > 1e-9 {
+			t.Fatalf("value %d: expected %f, got %f", i, expected[i], point.Value)
+		}
+	}
+}
+
+func assertSeriesTimesAndValues(t *testing.T, ts TimeSeries, expectedTimes []time.Time, expectedValues []float64) {
+	t.Helper()
+	points := ts.DataPoints()
+	if len(points) != len(expectedTimes) || len(points) != len(expectedValues) {
+		t.Fatalf("expected %d points, got %d", len(expectedValues), len(points))
+	}
+	for i, point := range points {
+		if !point.Timestamp.Equal(expectedTimes[i]) {
+			t.Fatalf("timestamp %d: expected %v, got %v", i, expectedTimes[i], point.Timestamp)
+		}
+		if math.Abs(point.Value-expectedValues[i]) > 1e-9 {
+			t.Fatalf("value %d: expected %f, got %f", i, expectedValues[i], point.Value)
+		}
+	}
+}

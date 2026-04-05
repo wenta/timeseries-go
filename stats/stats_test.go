@@ -410,3 +410,148 @@ func TestMinMaxNormalizeNegativeValues(t *testing.T) {
 		}
 	}
 }
+
+func TestCovariance(t *testing.T) {
+	ts1 := buildStatsSeries([]float64{1, 2, 3})
+	ts2 := buildStatsSeries([]float64{2, 4, 6})
+
+	covariance, err := Covariance(ts1, ts2)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if math.Abs(covariance-2) > 1e-9 {
+		t.Fatalf("expected covariance 2, got %f", covariance)
+	}
+}
+
+func TestCovariancePartialOverlapAndErrors(t *testing.T) {
+	base := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	left := timeseriesgo.FromDataPoints([]timeseriesgo.DataPoint{
+		{Timestamp: base, Value: 1},
+		{Timestamp: base.Add(time.Hour), Value: 3},
+		{Timestamp: base.Add(2 * time.Hour), Value: 5},
+	})
+	right := timeseriesgo.FromDataPoints([]timeseriesgo.DataPoint{
+		{Timestamp: base.Add(time.Hour), Value: 2},
+		{Timestamp: base.Add(2 * time.Hour), Value: 4},
+	})
+
+	covariance, err := Covariance(left, right)
+	if err != nil {
+		t.Fatalf("unexpected error for partial overlap: %v", err)
+	}
+	if math.Abs(covariance-2) > 1e-9 {
+		t.Fatalf("expected covariance 2, got %f", covariance)
+	}
+
+	if _, err := Covariance(timeseriesgo.Empty(), right); err == nil {
+		t.Fatal("expected error for empty input")
+	}
+	if _, err := Covariance(buildStatsSeries([]float64{1}), buildStatsSeries([]float64{2})); err == nil {
+		t.Fatal("expected error for insufficient overlap")
+	}
+}
+
+func TestZNormalize(t *testing.T) {
+	ts := buildStatsSeries([]float64{10, 11, 10, 12, 11, 50})
+	normalized, err := ZNormalize(ts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expected := []float64{-0.457738, -0.395319, -0.457738, -0.332900, -0.395319, 2.039013}
+	assertStatValues(t, normalized, expected, 1e-4)
+
+	if _, err := ZNormalize(buildStatsSeries([]float64{5, 5, 5})); err == nil {
+		t.Fatal("expected error for constant series")
+	}
+}
+
+func TestRollingHelpers(t *testing.T) {
+	ts := buildMinuteSeries([]float64{5, 2, 4, 1})
+
+	assertStatValues(t, RollingSum(ts, 2*time.Minute), []float64{5, 7, 6, 5}, 1e-9)
+	assertStatValues(t, RollingMean(ts, 2*time.Minute), []float64{5, 3.5, 3, 2.5}, 1e-9)
+	assertStatValues(t, RollingMin(ts, 2*time.Minute), []float64{5, 2, 2, 1}, 1e-9)
+	assertStatValues(t, RollingMax(ts, 2*time.Minute), []float64{5, 5, 4, 4}, 1e-9)
+
+	stdSeries := buildMinuteSeries([]float64{1, 3, 5})
+	assertStatValues(t, RollingStdDev(stdSeries, 2*time.Minute), []float64{0, math.Sqrt(2), math.Sqrt(2)}, 1e-9)
+}
+
+func TestRollingMedian(t *testing.T) {
+	ts := buildMinuteSeries([]float64{1, 100, 2, 3})
+	assertStatValues(t, RollingMedian(ts, 3*time.Minute), []float64{1, 50.5, 2, 3}, 1e-9)
+}
+
+func TestRollingInvalidWindowFallbacks(t *testing.T) {
+	ts := buildMinuteSeries([]float64{2, 4, 6})
+
+	assertStatValues(t, RollingSum(ts, 0), []float64{2, 4, 6}, 1e-9)
+	assertStatValues(t, RollingMin(ts, 0), []float64{2, 4, 6}, 1e-9)
+	assertStatValues(t, RollingMedian(ts, 0), []float64{2, 4, 6}, 1e-9)
+	assertStatValues(t, RollingStdDev(ts, 0), []float64{0, 0, 0}, 1e-9)
+}
+
+func TestEMA(t *testing.T) {
+	ts := buildStatsSeries([]float64{1, 2, 3})
+	ema, err := EMA(ts, 0.5)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	assertStatValues(t, ema, []float64{1, 1.5, 2.25}, 1e-9)
+	if _, err := EMA(ts, -0.1); err == nil {
+		t.Fatal("expected error for invalid alpha")
+	}
+}
+
+func TestEWVariance(t *testing.T) {
+	ts := buildStatsSeries([]float64{1, 3, 5})
+	variance, err := EWVariance(ts, 0.5)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	assertStatValues(t, variance, []float64{0, 1, 2.75}, 1e-9)
+	if _, err := EWVariance(ts, 1.1); err == nil {
+		t.Fatal("expected error for invalid alpha")
+	}
+}
+
+func buildStatsSeries(values []float64) timeseriesgo.TimeSeries {
+	base := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	points := make([]timeseriesgo.DataPoint, len(values))
+	for i, value := range values {
+		points[i] = timeseriesgo.DataPoint{
+			Timestamp: base.Add(time.Duration(i) * time.Hour),
+			Value:     value,
+		}
+	}
+	return timeseriesgo.FromDataPoints(points)
+}
+
+func buildMinuteSeries(values []float64) timeseriesgo.TimeSeries {
+	base := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	points := make([]timeseriesgo.DataPoint, len(values))
+	for i, value := range values {
+		points[i] = timeseriesgo.DataPoint{
+			Timestamp: base.Add(time.Duration(i) * time.Minute),
+			Value:     value,
+		}
+	}
+	return timeseriesgo.FromDataPoints(points)
+}
+
+func assertStatValues(t *testing.T, ts timeseriesgo.TimeSeries, expected []float64, epsilon float64) {
+	t.Helper()
+	points := ts.DataPoints()
+	if len(points) != len(expected) {
+		t.Fatalf("expected %d points, got %d", len(expected), len(points))
+	}
+	for i, point := range points {
+		if math.Abs(point.Value-expected[i]) > epsilon {
+			t.Fatalf("value %d: expected %f, got %f", i, expected[i], point.Value)
+		}
+	}
+}

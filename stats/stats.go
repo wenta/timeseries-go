@@ -3,6 +3,7 @@ package stats
 import (
 	"errors"
 	"math"
+	"slices"
 	"time"
 
 	timeseriesgo "github.com/wenta/timeseries-go"
@@ -339,4 +340,398 @@ func MinMaxNormalize(ts timeseriesgo.TimeSeries) (timeseriesgo.TimeSeries, error
 	}
 
 	return result, nil
+}
+
+/**
+ * Calculates the covariance between two TimeSeries on overlapping timestamps.
+ *
+ * The result uses only aligned datapoints and returns sample covariance
+ * (division by n-1). Constant series are allowed and produce zero covariance.
+ *
+ * @param ts1 The first TimeSeries to compare.
+ * @param ts2 The second TimeSeries to compare.
+ *
+ * @return The sample covariance of aligned values, or an error if there are fewer than two aligned points.
+ */
+func Covariance(ts1, ts2 timeseriesgo.TimeSeries) (float64, error) {
+	if ts1.IsEmpty() || ts2.IsEmpty() {
+		return 0, errors.New("one or both TimeSeries are empty")
+	}
+
+	points1 := ts1.DataPoints()
+	points2 := ts2.DataPoints()
+	left := 0
+	right := 0
+	count := 0
+	meanX := 0.0
+	meanY := 0.0
+	sumProducts := 0.0
+
+	for left < len(points1) && right < len(points2) {
+		switch points1[left].Timestamp.Compare(points2[right].Timestamp) {
+		case -1:
+			left++
+		case 1:
+			right++
+		default:
+			count++
+			x := points1[left].Value
+			y := points2[right].Value
+			deltaX := x - meanX
+			meanX += deltaX / float64(count)
+			deltaY := y - meanY
+			meanY += deltaY / float64(count)
+			sumProducts += deltaX * (y - meanY)
+
+			left++
+			right++
+		}
+	}
+
+	if count < 2 {
+		return 0, errors.New("not enough aligned points")
+	}
+	return sumProducts / float64(count-1), nil
+}
+
+/**
+ * Normalizes the TimeSeries values using standard Z-score normalization.
+ *
+ * The output preserves timestamps and uses the sample standard deviation. A
+ * constant series returns an error because the standard deviation is zero.
+ *
+ * @param ts The TimeSeries to normalize.
+ *
+ * @return A new Z-normalized TimeSeries, or an error if the series is empty or has zero variance.
+ */
+func ZNormalize(ts timeseriesgo.TimeSeries) (timeseriesgo.TimeSeries, error) {
+	if ts.IsEmpty() {
+		return timeseriesgo.Empty(), errors.New("TimeSeries is empty")
+	}
+
+	mv, err := GetMeanAndVariance(ts)
+	if err != nil {
+		return timeseriesgo.Empty(), err
+	}
+	if mv.SampleVariance == 0 {
+		return timeseriesgo.Empty(), errors.New("zero variance in TimeSeries")
+	}
+
+	stddev := math.Sqrt(mv.SampleVariance)
+	points := ts.DataPoints()
+	result := make([]timeseriesgo.DataPoint, len(points))
+	for i, point := range points {
+		result[i] = timeseriesgo.DataPoint{
+			Timestamp: point.Timestamp,
+			Value:     (point.Value - mv.Mean) / stddev,
+		}
+	}
+	return timeseriesgo.FromDataPoints(result), nil
+}
+
+/**
+ * Calculates the rolling sum of a TimeSeries over a trailing time window.
+ *
+ * @param ts The TimeSeries to aggregate.
+ * @param window The trailing time window used for each sum.
+ *
+ * @return A new TimeSeries containing rolling sums. If window <= 0, returns a copy of the original series.
+ */
+func RollingSum(ts timeseriesgo.TimeSeries, window time.Duration) timeseriesgo.TimeSeries {
+	if ts.IsEmpty() {
+		return timeseriesgo.Empty()
+	}
+	if window <= 0 {
+		return timeseriesgo.FromDataPoints(ts.DataPoints())
+	}
+
+	points := ts.DataPoints()
+	result := make([]timeseriesgo.DataPoint, len(points))
+	left := 0
+	runningSum := 0.0
+
+	for right, point := range points {
+		runningSum += point.Value
+		for left <= right && point.Timestamp.Sub(points[left].Timestamp) >= window {
+			runningSum -= points[left].Value
+			left++
+		}
+
+		result[right] = timeseriesgo.DataPoint{
+			Timestamp: point.Timestamp,
+			Value:     runningSum,
+		}
+	}
+	return timeseriesgo.FromDataPoints(result)
+}
+
+/**
+ * Calculates the rolling mean of a TimeSeries over a trailing time window.
+ *
+ * This is an explicit alias for MovingAverage, intended for discoverability.
+ *
+ * @param ts The TimeSeries to aggregate.
+ * @param window The trailing time window used for each mean.
+ *
+ * @return A new TimeSeries containing rolling means.
+ */
+func RollingMean(ts timeseriesgo.TimeSeries, window time.Duration) timeseriesgo.TimeSeries {
+	return MovingAverage(ts, window)
+}
+
+/**
+ * Calculates the rolling minimum of a TimeSeries over a trailing time window.
+ *
+ * @param ts The TimeSeries to aggregate.
+ * @param window The trailing time window used for each minimum.
+ *
+ * @return A new TimeSeries containing rolling minima. If window <= 0, returns a copy of the original series.
+ */
+func RollingMin(ts timeseriesgo.TimeSeries, window time.Duration) timeseriesgo.TimeSeries {
+	return rollingExtrema(ts, window, true)
+}
+
+/**
+ * Calculates the rolling maximum of a TimeSeries over a trailing time window.
+ *
+ * @param ts The TimeSeries to aggregate.
+ * @param window The trailing time window used for each maximum.
+ *
+ * @return A new TimeSeries containing rolling maxima. If window <= 0, returns a copy of the original series.
+ */
+func RollingMax(ts timeseriesgo.TimeSeries, window time.Duration) timeseriesgo.TimeSeries {
+	return rollingExtrema(ts, window, false)
+}
+
+/**
+ * Calculates the rolling standard deviation of a TimeSeries over a trailing time window.
+ *
+ * This uses sample standard deviation for windows with at least two points. A
+ * single-point window yields 0.
+ *
+ * @param ts The TimeSeries to aggregate.
+ * @param window The trailing time window used for each standard deviation.
+ *
+ * @return A new TimeSeries containing rolling standard deviations. If window <= 0, returns zeros at the original timestamps.
+ */
+func RollingStdDev(ts timeseriesgo.TimeSeries, window time.Duration) timeseriesgo.TimeSeries {
+	if ts.IsEmpty() {
+		return timeseriesgo.Empty()
+	}
+	points := ts.DataPoints()
+	result := make([]timeseriesgo.DataPoint, len(points))
+	if window <= 0 {
+		for i, point := range points {
+			result[i] = timeseriesgo.DataPoint{Timestamp: point.Timestamp, Value: 0}
+		}
+		return timeseriesgo.FromDataPoints(result)
+	}
+
+	left := 0
+	runningSum := 0.0
+	runningSumSquares := 0.0
+	for right, point := range points {
+		runningSum += point.Value
+		runningSumSquares += point.Value * point.Value
+		for left <= right && point.Timestamp.Sub(points[left].Timestamp) >= window {
+			runningSum -= points[left].Value
+			runningSumSquares -= points[left].Value * points[left].Value
+			left++
+		}
+
+		count := right - left + 1
+		variance := 0.0
+		if count > 1 {
+			n := float64(count)
+			variance = (runningSumSquares - (runningSum*runningSum)/n) / float64(count-1)
+			if variance < 0 && variance > -1e-12 {
+				variance = 0
+			}
+		}
+
+		result[right] = timeseriesgo.DataPoint{
+			Timestamp: point.Timestamp,
+			Value:     math.Sqrt(variance),
+		}
+	}
+	return timeseriesgo.FromDataPoints(result)
+}
+
+/**
+ * Calculates the rolling median of a TimeSeries over a trailing time window.
+ *
+ * @param ts The TimeSeries to aggregate.
+ * @param window The trailing time window used for each median.
+ *
+ * @return A new TimeSeries containing rolling medians. If window <= 0, returns a copy of the original series.
+ */
+func RollingMedian(ts timeseriesgo.TimeSeries, window time.Duration) timeseriesgo.TimeSeries {
+	if ts.IsEmpty() {
+		return timeseriesgo.Empty()
+	}
+	if window <= 0 {
+		return timeseriesgo.FromDataPoints(ts.DataPoints())
+	}
+
+	points := ts.DataPoints()
+	result := make([]timeseriesgo.DataPoint, len(points))
+	left := 0
+	sortedWindow := make([]float64, 0, len(points))
+
+	for right, point := range points {
+		sortedWindow = insertSortedValue(sortedWindow, point.Value)
+		for left <= right && point.Timestamp.Sub(points[left].Timestamp) >= window {
+			sortedWindow = removeSortedValue(sortedWindow, points[left].Value)
+			left++
+		}
+
+		result[right] = timeseriesgo.DataPoint{
+			Timestamp: point.Timestamp,
+			Value:     medianSortedValues(sortedWindow),
+		}
+	}
+	return timeseriesgo.FromDataPoints(result)
+}
+
+/**
+ * Calculates the exponential moving average (EMA) of a TimeSeries.
+ *
+ * @param ts The TimeSeries to smooth.
+ * @param alpha The smoothing factor in the range [0,1].
+ *
+ * @return A new TimeSeries containing the exponential moving average, or an error if the input is invalid.
+ */
+func EMA(ts timeseriesgo.TimeSeries, alpha float64) (timeseriesgo.TimeSeries, error) {
+	if ts.IsEmpty() {
+		return timeseriesgo.Empty(), errors.New("TimeSeries is empty")
+	}
+	if alpha < 0 || alpha > 1 {
+		return timeseriesgo.Empty(), errors.New("alpha must be in [0,1]")
+	}
+
+	points := ts.DataPoints()
+	result := make([]timeseriesgo.DataPoint, len(points))
+	ema := points[0].Value
+	for i, point := range points {
+		if i > 0 {
+			ema = alpha*point.Value + (1-alpha)*ema
+		}
+		result[i] = timeseriesgo.DataPoint{
+			Timestamp: point.Timestamp,
+			Value:     ema,
+		}
+	}
+	return timeseriesgo.FromDataPoints(result), nil
+}
+
+/**
+ * Calculates the exponentially weighted variance of a TimeSeries.
+ *
+ * This uses the same smoothing factor as EMA and tracks local variability
+ * relative to the exponentially weighted mean.
+ *
+ * @param ts The TimeSeries to analyze.
+ * @param alpha The smoothing factor in the range [0,1].
+ *
+ * @return A new TimeSeries containing exponentially weighted variance values, or an error if the input is invalid.
+ */
+func EWVariance(ts timeseriesgo.TimeSeries, alpha float64) (timeseriesgo.TimeSeries, error) {
+	if ts.IsEmpty() {
+		return timeseriesgo.Empty(), errors.New("TimeSeries is empty")
+	}
+	if alpha < 0 || alpha > 1 {
+		return timeseriesgo.Empty(), errors.New("alpha must be in [0,1]")
+	}
+
+	points := ts.DataPoints()
+	result := make([]timeseriesgo.DataPoint, len(points))
+	mean := points[0].Value
+	variance := 0.0
+	result[0] = timeseriesgo.DataPoint{Timestamp: points[0].Timestamp, Value: 0}
+	for i := 1; i < len(points); i++ {
+		diff := points[i].Value - mean
+		mean += alpha * diff
+		variance = (1 - alpha) * (variance + alpha*diff*diff)
+		result[i] = timeseriesgo.DataPoint{
+			Timestamp: points[i].Timestamp,
+			Value:     variance,
+		}
+	}
+	return timeseriesgo.FromDataPoints(result), nil
+}
+
+func rollingExtrema(ts timeseriesgo.TimeSeries, window time.Duration, minMode bool) timeseriesgo.TimeSeries {
+	if ts.IsEmpty() {
+		return timeseriesgo.Empty()
+	}
+	if window <= 0 {
+		return timeseriesgo.FromDataPoints(ts.DataPoints())
+	}
+
+	points := ts.DataPoints()
+	result := make([]timeseriesgo.DataPoint, len(points))
+	deque := make([]int, 0, len(points))
+	head := 0
+	left := 0
+
+	for right, point := range points {
+		for left <= right && point.Timestamp.Sub(points[left].Timestamp) >= window {
+			if head < len(deque) && deque[head] == left {
+				head++
+			}
+			left++
+		}
+
+		for len(deque) > head {
+			lastIdx := deque[len(deque)-1]
+			if minMode {
+				if points[lastIdx].Value < point.Value {
+					break
+				}
+			} else {
+				if points[lastIdx].Value > point.Value {
+					break
+				}
+			}
+			deque = deque[:len(deque)-1]
+		}
+		deque = append(deque, right)
+
+		if head > 0 && head*2 >= len(deque) {
+			deque = slices.Clone(deque[head:])
+			head = 0
+		}
+
+		result[right] = timeseriesgo.DataPoint{
+			Timestamp: point.Timestamp,
+			Value:     points[deque[head]].Value,
+		}
+	}
+
+	return timeseriesgo.FromDataPoints(result)
+}
+
+func insertSortedValue(sortedValues []float64, value float64) []float64 {
+	index, _ := slices.BinarySearch(sortedValues, value)
+	sortedValues = append(sortedValues, 0)
+	copy(sortedValues[index+1:], sortedValues[index:])
+	sortedValues[index] = value
+	return sortedValues
+}
+
+func removeSortedValue(sortedValues []float64, value float64) []float64 {
+	index, found := slices.BinarySearch(sortedValues, value)
+	if !found {
+		return sortedValues
+	}
+	copy(sortedValues[index:], sortedValues[index+1:])
+	return sortedValues[:len(sortedValues)-1]
+}
+
+func medianSortedValues(sortedValues []float64) float64 {
+	mid := len(sortedValues) / 2
+	if len(sortedValues)%2 == 1 {
+		return sortedValues[mid]
+	}
+	return (sortedValues[mid-1] + sortedValues[mid]) / 2
 }
